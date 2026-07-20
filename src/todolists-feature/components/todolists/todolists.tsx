@@ -5,8 +5,6 @@ import type { TodolistsProps } from './types';
 export const Todolists = ({ todolistsPromise }: TodolistsProps) => {
   const todolists = use(todolistsPromise);
 
-  console.log(todolists);
-
   let content;
   if (!todolists.length) {
     content = <p>No todolists yet</p>;

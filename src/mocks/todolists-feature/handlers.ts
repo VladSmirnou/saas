@@ -1,11 +1,10 @@
 import { delay, http, HttpResponse, type AnyHandler } from 'msw';
 import { todolists } from './collections';
+import { API_BASE_URL } from '../../constants/api/constants';
 
 export const handlers: AnyHandler[] = [
-  http.get('/todolists', async () => {
+  http.get(`${API_BASE_URL}/todolists`, async () => {
     await delay(1000);
-    const data = todolists.findMany();
-    console.log('data:', data);
-    return HttpResponse.json(data);
+    return HttpResponse.json(todolists.findMany());
   }),
 ];
