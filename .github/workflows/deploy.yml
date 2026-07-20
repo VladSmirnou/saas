@@ -39,9 +39,9 @@ jobs:
         run: npm ci
       - name: Build
         env:
-          VITE_PROJECT_BASE: '/saas/'
-          VITE_MSW_FILE_PATH: '/saas/mockServiceWorker.js'
-          VITE_API_BASE_URL: 'https://my-dev-api.com'
+          VITE_PROJECT_BASE: ${{ vars.VITE_PROJECT_BASE }}
+          VITE_MSW_FILE_PATH: ${{ vars.VITE_MSW_FILE_PATH }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
         run: npm run build
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
