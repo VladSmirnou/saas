@@ -21,9 +21,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  calling-ci-pipeline:
+  calling-ci-workflow:
     uses: ./.github/workflows/ci.yml
 
-  calling-cd-pipeline:
-    needs: calling-ci-pipeline
+  calling-cd-workflow:
+    needs: calling-ci-workflow
     uses: ./.github/workflows/cd.yml
