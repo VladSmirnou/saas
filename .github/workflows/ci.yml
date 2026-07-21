@@ -1,0 +1,11 @@
+name: CI workflow
+
+on:
+  workflow_call:
+
+jobs:
+  call-linting-workflow:
+    uses: ./.github/workflows/lint-format.yml
+  call-tesing-workflow:
+    needs: call-linting-workflow
+    uses: ./.github/workflows/tests.yml
