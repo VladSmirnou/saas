@@ -1,14 +1,14 @@
-name: Lint-workflow
+name: Lint-Format-TS-workflow
 
 on:
   workflow_call:
 
 jobs:
-  lint-format:
-    name: Linting and Formatting
+  lint-format-ts:
+    name: Linting & Formatting & TS
     runs-on: ubuntu-latest
     steps: 
       - uses: actions/checkout@v6
       - uses: ./.github/actions/checkout-repo-setup-node
-      - name: Pre-deply checks
-        run: npm run pre-deploy 
+      - name: Call related npm script
+        run: npm run lint-format-ts

@@ -6,8 +6,8 @@ on:
     branches: ['dev', 'master']
 
 jobs:
-  call-linting-workflow:
-    uses: ./.github/workflows/lint-format.yml
+  call-lint-format-ts-workflow:
+    uses: ./.github/workflows/lint-format-ts.yml
   call-tesing-workflow:
-    needs: call-linting-workflow
+    needs: call-lint-format-ts-workflow
     uses: ./.github/workflows/tests.yml

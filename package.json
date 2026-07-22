@@ -12,7 +12,7 @@
     "test": "vitest",
     "prepare": "husky",
     "typecheck": "tsc -b --noEmit",
-    "pre-deploy": "npm run typecheck && npm run lint && npm run prettier"
+    "lint-format-ts": "npm run typecheck && npm run lint && npm run prettier"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -59,9 +59,10 @@
     ]
   },
   "lint-staged": {
-    "**/*.{js,ts,tsx}": [
-      "npm run prettier",
-      "npm run lint"
+    "*.{js,ts,tsx}": [
+      "prettier --write",
+      "eslint --fix",
+      "vitest related --run"
     ]
   }
 }
