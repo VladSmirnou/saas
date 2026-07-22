@@ -2,6 +2,8 @@ name: CI workflow
 
 on:
   workflow_call:
+  pull_request:
+    branches: ['dev', 'master']
 
 jobs:
   call-linting-workflow:
