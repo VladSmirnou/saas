@@ -6,6 +6,11 @@ const viteConfig = defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     base: env.VITE_PROJECT_BASE,
+    define: {
+      'process.env': {},
+      'process.config': {},
+      'process.versions': {},
+    },
   };
 });
 
