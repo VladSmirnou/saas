@@ -20,11 +20,13 @@
     "@fontsource/roboto": "^5.2.10",
     "@mui/material": "^9.2.0",
     "axios": "^1.18.1",
+    "bcrypt": "^6.0.0",
+    "cookie": "^2.0.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-error-boundary": "^6.1.2",
     "react-hook-form": "^7.82.0",
-    "react-router": "^8.2.0",
+    "react-router": "^8.4.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -35,6 +37,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/bcrypt": "^6.0.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
