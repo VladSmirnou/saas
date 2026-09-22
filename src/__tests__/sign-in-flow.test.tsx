@@ -23,30 +23,14 @@ test('successfull sign-in', async () => {
   const user = userEvent.setup();
 
   server.use(
-    http.post(createUrl('sign-in'), () => {
-      return new HttpResponse(null, { status: 200 });
-    }),
     http.get(createUrl('user'), () => {
-      return HttpResponse.json({
-        user: null,
-      });
+      return HttpResponse.json({ user: null });
     }),
   );
 
   await act(() => render(<RouterMock initialEntries={['/sign-in']} />));
 
-  server.use(
-    http.get(createUrl('user'), () => {
-      return HttpResponse.json({
-        user: {
-          id: 1,
-          username: 'bob',
-          email: 'asd',
-          isEmailVerified: false,
-        },
-      });
-    }),
-  );
+  server.resetHandlers();
 
   const emailInput = await screen.findByRole('textbox', { name: /email/i });
   const passwordInput = screen.getByRole('textbox', { name: /password/i });

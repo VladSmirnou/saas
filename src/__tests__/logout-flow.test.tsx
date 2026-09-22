@@ -1,10 +1,8 @@
-import { test } from 'vitest';
-import { server } from '../mocks/todolists-feature/server';
-import { http, HttpResponse } from 'msw';
-import { createUrl } from '../lib/create-url';
-import { render, screen, act } from '@testing-library/react';
-import { RouterMock } from '../mocks/todolists-feature/router-mock';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { test } from 'vitest';
+import { RouterMock } from '../mocks/todolists-feature/router-mock';
+import { server } from '../mocks/todolists-feature/server';
 
 // signed in user pesses the logout button
 // a request is sent to the backend
@@ -17,23 +15,6 @@ test.afterAll(() => server.close());
 
 test('logout flow', async () => {
   const user = userEvent.setup();
-
-  server.use(
-    http.get(createUrl('user'), () => {
-      return HttpResponse.json({
-        user: {
-          id: 1,
-          username: 'bob',
-          email: 'email',
-          isEmailVerified: false,
-        },
-      });
-    }),
-
-    http.delete(createUrl('sign-out'), () => {
-      return new HttpResponse(null, { status: 200 });
-    }),
-  );
 
   await act(() => render(<RouterMock initialEntries={['/']} />));
 

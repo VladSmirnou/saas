@@ -3,6 +3,7 @@ import { useAuthContext } from '../../provider/auth-context';
 
 export const Header = () => {
   const { userPromise, signOut } = useAuthContext();
+
   const user = use(userPromise);
 
   return (

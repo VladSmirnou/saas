@@ -1,7 +1,7 @@
-import axios from 'axios';
+import { isAxiosError } from 'axios';
 import { startTransition, useMemo, useState } from 'react';
 import { Outlet } from 'react-router';
-import { createUrl } from '../lib/create-url';
+import { instance } from '../api/axios-instance';
 import type { User } from '../mocks/todolists-feature/collections';
 import { AuthContext, type AuthContextType } from './auth-context';
 
@@ -20,24 +20,23 @@ import { AuthContext, type AuthContextType } from './auth-context';
 // if user is returned then show the dashboard
 // else show the sign-in page
 
-type FetchUserResponse = { user: User | null };
+type FetchUserResponse = { user: User };
 
-const fetchUser = async (header?: string) => {
+const fetchUser = async () => {
   try {
-    const { data } = await axios.get<FetchUserResponse>(createUrl('user'), {
-      headers: {
-        'x-my-header': header,
-      },
-    });
+    const { data } = await instance.get<FetchUserResponse>('/user');
     return data.user;
-  } catch {
-    throw new Error('failed to fetch user');
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 401) {
+      return null;
+    }
   }
+  throw new Error('failed to fetch user');
 };
 
 const logout = async () => {
   try {
-    await axios.delete(createUrl('sign-out'));
+    await instance.delete('/sign-out');
   } catch {
     throw new Error('failed to sign-out');
   }
@@ -51,7 +50,7 @@ export const AuthProvider = () => {
       userPromise,
       signIn() {
         startTransition(() => {
-          setUserPromise(fetchUser('hellow'));
+          setUserPromise(fetchUser());
         });
       },
       async signOut() {

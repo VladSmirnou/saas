@@ -1,6 +1,7 @@
-import axios, { isAxiosError } from 'axios';
+import { isAxiosError } from 'axios';
 import { useActionState } from 'react';
-import { createUrl } from '../../lib/create-url';
+import { Link } from 'react-router';
+import { instance } from '../../api/axios-instance';
 import { useAuthContext } from '../../provider/auth-context';
 
 type State = {
@@ -16,10 +17,7 @@ export const SignIn = () => {
   const [state, dispatch, isPending] = useActionState<State, FormData>(
     async (prevState, formData) => {
       try {
-        await axios.post(
-          createUrl('sign-in'),
-          Object.fromEntries(formData.entries()),
-        );
+        await instance.post('/sign-in', Object.fromEntries(formData.entries()));
         signIn();
         return {};
       } catch (error) {
@@ -62,6 +60,7 @@ export const SignIn = () => {
         </div>
         <button disabled={isPending}>submit</button>
       </form>
+      <Link to="/sign-up">sign-up</Link>
     </div>
   );
 };

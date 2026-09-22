@@ -112,9 +112,6 @@ test('successfull signup', async () => {
     http.get(createUrl('user'), () => {
       return HttpResponse.json({ user: null });
     }),
-    http.post(createUrl('sign-up'), () => {
-      return new HttpResponse(null, { status: 201 });
-    }),
   );
 
   await act(() => render(<RouterMock initialEntries={['/sign-up']} />));
