@@ -3,20 +3,23 @@ import cors from 'cors';
 import express from 'express';
 import * as z from 'zod';
 import { SESSION_ID_NAME } from './constants/session';
-import { sessions, users, type User } from './db';
 import {
   withAuthenticatedResponse,
   withSession,
   withSessionAndUser,
 } from './decorators';
-import { getEncryptedSessionToken } from './lib/get-encrypted-session-token';
+import { getUserDTO } from './lib/get-user-dto';
 import { comparePasswords, hashPassword } from './lib/manage-password';
-import { signSessionToken } from './lib/sign-session-token';
+import { repo } from './repo/repo';
 import { signInSchema, signupSchema } from './validators';
+import {
+  getEncryptedSessionToken,
+  signSessionToken,
+} from './lib/session-utils';
 
 const port = process.env.PORT;
 
-const app = express();
+export const app = express();
 app.use(cookieParser());
 app.use(express.json());
 app.use(
@@ -26,22 +29,10 @@ app.use(
   }),
 );
 
-const getUserDTO = (user: User) => {
-  return {
-    id: user.id,
-    email: user.email,
-    username: user.username,
-    isEmailVerified: user.isEmailVerified,
-    role: user.role,
-  } as Omit<User, 'password'>;
-};
-
 app.get(
   '/user',
   withSessionAndUser((req, res) => {
-    return res.json({
-      user: getUserDTO(req.user),
-    });
+    return res.json({ user: getUserDTO(req.user) });
   }),
 );
 
@@ -63,7 +54,7 @@ app.post(
 
     let user;
     try {
-      user = users.findFirst((q) => q.where({ email }));
+      user = repo.findUserByEmail(email);
       if (!user) {
         throw new Error("user doesn't exist");
       }
@@ -77,7 +68,13 @@ app.post(
     const userPassword = user.password;
 
     try {
-      await comparePasswords({ raw: password, encrypted: userPassword });
+      const isEqual = await comparePasswords({
+        raw: password,
+        encrypted: userPassword,
+      });
+      if (!isEqual) {
+        throw new Error('');
+      }
     } catch {
       return res.status(401).json({
         server: 'invalid credentials',
@@ -91,21 +88,21 @@ app.post(
 
       const sessionMaxAge = createdAt + 7 * 24 * 60 * 60 * 1000;
 
-      const newSession = await sessions.create({
-        createdAt: new Date(createdAt).toISOString(),
-        expiresAt: new Date(sessionMaxAge).toISOString(),
+      const newSession = await repo.createSession({
+        createdAt,
+        expiresAt: sessionMaxAge,
         user,
         token: sessionToken,
       });
+
       const newSessionToken = newSession.token;
       const newSessionSignature = signSessionToken(newSessionToken);
       const signedSessionIdValue = `${newSessionToken}.${newSessionSignature}`;
 
       res.cookie(SESSION_ID_NAME, signedSessionIdValue, {
-        maxAge: sessionMaxAge,
+        maxAge: Math.floor(sessionMaxAge / 1000),
         httpOnly: true,
         secure: true,
-        path: '/',
         sameSite: 'lax',
       });
       return res.sendStatus(200);
@@ -126,18 +123,18 @@ app.post(
 
     if (error) {
       const flatErrors = z.flattenError(error).fieldErrors;
-      return res
-        .json({
-          email: flatErrors.email?.[0],
-          password: flatErrors.password?.[0],
-          username: flatErrors.username?.[0],
-        })
-        .status(400);
+      return res.status(400).json({
+        email: flatErrors.email?.[0],
+        password: flatErrors.password?.[0],
+        username: flatErrors.username?.[0],
+      });
     }
 
     const { email, password, username } = data;
 
-    const userByUsername = users.findFirst((q) => q.where({ username }));
+    const hashedPassword = await hashPassword(password);
+
+    const userByUsername = repo.checkUsernameDuplication(username);
 
     if (userByUsername) {
       return res
@@ -145,25 +142,28 @@ app.post(
         .json({ server: 'user with this username already exist' });
     }
 
-    const userByEmail = users.findFirst((q) => q.where({ email }));
-
-    const hashedPassword = await hashPassword(password);
+    let userByEmail;
+    try {
+      userByEmail = repo.findUserByEmail(email);
+    } catch (error) {
+      console.log(error);
+      return res.status(400).json({ server: 'Failed to sign-up' });
+    }
 
     if (userByEmail) {
-      // timing here will be a lot faster than in the branch below
       return res.sendStatus(201);
     }
 
     try {
-      await users.create({
+      await repo.createUser({
         email,
-        password: hashedPassword,
+        hashedPassword,
         username,
       });
       res.sendStatus(201);
     } catch (error) {
       console.log(error);
-      return res.status(400).json({ server: 'failed to create user' });
+      return res.status(400).json({ server: 'Failed to create user' });
     }
   }),
 );
@@ -173,8 +173,10 @@ app.delete(
   withSession((req, res) => {
     const session = req.session;
 
+    res.clearCookie(SESSION_ID_NAME);
+
     try {
-      sessions.delete((q) => q.where({ token: session.token }));
+      repo.deleteSessionByToken(session.token);
       res.sendStatus(200);
     } catch (error) {
       console.log(error);
@@ -182,7 +184,6 @@ app.delete(
         message: 'Failed to logout. Refresh your page and try again.',
       });
     }
-    res.clearCookie(SESSION_ID_NAME);
   }),
 );
 
