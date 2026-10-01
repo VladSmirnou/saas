@@ -1,16 +1,22 @@
-import { describe, expect, test, vitest } from 'vitest';
+import { describe, expect, test, vi, vitest } from 'vitest';
+import { IDLE_TIMEOUT } from '../constants/session';
 import {
   getSessionInstanceBySessionValue,
+  isFakeUser,
   isSessionFresh,
   safeCompareSessionSignatures,
   signSessionToken,
+  clearExpiredIdleTimeSessions,
 } from '../lib/session-utils';
-import type { Session } from '../repo/db';
+import type { Session, User } from '../repo/db';
 import { repo } from '../repo/repo';
 
 vitest.mock('../repo/repo');
 
 const mockedFindSessionByToken = vitest.mocked(repo.findSessionByToken);
+const mockedDeleteSessionsWithExpiredIdleTimeout = vitest.mocked(
+  repo.deleteSessionsWithExpiredIdleTimeout,
+);
 
 describe('safeCompareSessionSignatures', () => {
   test('should return false if strings have different length', () => {
@@ -107,6 +113,32 @@ describe('getSessionInstanceBySessionValue', () => {
 
     expect(() => getSessionInstanceBySessionValue(sessionValue)).toThrow(
       errorMessage,
+    );
+  });
+});
+
+describe('isFakeUser', () => {
+  test('should return the correct boolean when fake and normal users passed', () => {
+    expect(isFakeUser({ fake: true, password: '123' })).toBeTruthy();
+    expect(isFakeUser({} as User)).toBeFalsy();
+  });
+});
+
+describe('clearExpiredIdleTimeSessions', () => {
+  test.beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  test.afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test('should be called a proper amount of times in a given time interval', () => {
+    const callTimes = 5;
+    clearExpiredIdleTimeSessions();
+
+    vi.advanceTimersByTime(IDLE_TIMEOUT * callTimes);
+    expect(mockedDeleteSessionsWithExpiredIdleTimeout).toHaveBeenCalledTimes(
+      callTimes,
     );
   });
 });

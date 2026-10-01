@@ -4,7 +4,7 @@
     "target": "es2024",
     "lib": ["ES2024", "DOM"],
     "module": "esnext",
-    "types": ["vite/client", "node"],
+    "types": ["vite/client", "node", "vitest/globals"],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 

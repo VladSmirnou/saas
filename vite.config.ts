@@ -6,6 +6,9 @@ const viteConfig = defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     base: env.VITE_PROJECT_BASE,
+    server: {
+      host: '127.0.0.1',
+    },
   };
 });
 

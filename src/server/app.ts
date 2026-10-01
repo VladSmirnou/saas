@@ -2,7 +2,11 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
 import * as z from 'zod';
-import { SESSION_ID_NAME } from './constants/session';
+import {
+  FAKE_USER,
+  SESSION_ABSOLUTE_TIMEOUT_MS,
+  SESSION_ID_NAME,
+} from './constants/session';
 import {
   withAuthenticatedResponse,
   withSession,
@@ -10,21 +14,24 @@ import {
 } from './decorators';
 import { getUserDTO } from './lib/get-user-dto';
 import { comparePasswords, hashPassword } from './lib/manage-password';
-import { repo } from './repo/repo';
-import { signInSchema, signupSchema } from './validators';
 import {
   getEncryptedSessionToken,
+  isFakeUser,
   signSessionToken,
 } from './lib/session-utils';
+import { repo } from './repo/repo';
+import { signInSchema, signupSchema } from './validators';
+import { users } from './repo/db';
 
-const port = process.env.PORT;
+const port = Number(process.env.PORT!);
+const host = process.env.HOST!;
 
 export const app = express();
 app.use(cookieParser());
 app.use(express.json());
 app.use(
   cors({
-    origin: 'http://localhost:5173',
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
     credentials: true,
   }),
 );
@@ -60,9 +67,7 @@ app.post(
       }
     } catch (error) {
       console.log(error);
-      return res.status(401).json({
-        server: 'invalid credentials',
-      });
+      user = FAKE_USER;
     }
 
     const userPassword = user.password;
@@ -72,10 +77,11 @@ app.post(
         raw: password,
         encrypted: userPassword,
       });
-      if (!isEqual) {
-        throw new Error('');
+      if (isFakeUser(user) || !isEqual) {
+        throw new Error("passwords don't match");
       }
-    } catch {
+    } catch (error) {
+      console.log(error);
       return res.status(401).json({
         server: 'invalid credentials',
       });
@@ -85,12 +91,14 @@ app.post(
 
     try {
       const createdAt = Date.now();
+      const createdAtDate = new Date(createdAt).toISOString();
 
-      const sessionMaxAge = createdAt + 7 * 24 * 60 * 60 * 1000;
+      const sessionExpiresAt = createdAt + SESSION_ABSOLUTE_TIMEOUT_MS;
 
       const newSession = await repo.createSession({
-        createdAt,
-        expiresAt: sessionMaxAge,
+        createdAt: createdAtDate,
+        updatedAt: createdAtDate,
+        expiresAt: new Date(sessionExpiresAt).toISOString(),
         user,
         token: sessionToken,
       });
@@ -100,11 +108,12 @@ app.post(
       const signedSessionIdValue = `${newSessionToken}.${newSessionSignature}`;
 
       res.cookie(SESSION_ID_NAME, signedSessionIdValue, {
-        maxAge: Math.floor(sessionMaxAge / 1000),
+        maxAge: SESSION_ABSOLUTE_TIMEOUT_MS,
         httpOnly: true,
         secure: true,
         sameSite: 'lax',
       });
+      res.set('cache-control', 'no-store');
       return res.sendStatus(200);
     } catch (error) {
       console.log(error);
@@ -132,15 +141,15 @@ app.post(
 
     const { email, password, username } = data;
 
-    const hashedPassword = await hashPassword(password);
+    const user = repo.findUserByUsername(username);
 
-    const userByUsername = repo.checkUsernameDuplication(username);
-
-    if (userByUsername) {
+    if (user) {
       return res
         .status(409)
         .json({ server: 'user with this username already exist' });
     }
+
+    const hashedPassword = await hashPassword(password);
 
     let userByEmail;
     try {
@@ -160,6 +169,7 @@ app.post(
         hashedPassword,
         username,
       });
+      console.log(users.findMany());
       res.sendStatus(201);
     } catch (error) {
       console.log(error);
@@ -173,8 +183,11 @@ app.delete(
   withSession((req, res) => {
     const session = req.session;
 
-    res.clearCookie(SESSION_ID_NAME);
-
+    res.clearCookie(SESSION_ID_NAME, {
+      secure: true,
+      httpOnly: true,
+    });
+    res.set('clear-site-data', '"cookies", "cache"');
     try {
       repo.deleteSessionByToken(session.token);
       res.sendStatus(200);
@@ -187,6 +200,15 @@ app.delete(
   }),
 );
 
-app.listen(port, () => {
+app.listen(port, host, () => {
   console.log('server is listening on port:', port);
+  import('./lib/seed-db')
+    .then(() => {
+      console.log('successfully seeded the DB');
+    })
+    .then(() => {
+      import('./lib/start-jobs').then(() => {
+        console.log('all jobs started successfully');
+      });
+    });
 });

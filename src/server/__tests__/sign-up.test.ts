@@ -1,14 +1,11 @@
 import request from 'supertest';
-import { expect, test, vitest } from 'vitest';
 import { app } from '../app';
 import { repo } from '../repo/repo';
 import type { User } from '../repo/db';
 
 vitest.mock('../repo/repo');
 
-const mockedCheckUsernameDuplication = vitest.mocked(
-  repo.checkUsernameDuplication,
-);
+const mockedFindUserByUsername = vitest.mocked(repo.findUserByUsername);
 
 const mockedFindUserbyEmail = vitest.mocked(repo.findUserByEmail);
 const mockedCreateUser = vitest.mocked(repo.createUser);
@@ -20,7 +17,7 @@ const mockedSubmittedData = {
 };
 
 test('should sign-up successfully', async () => {
-  mockedCheckUsernameDuplication.mockReturnValueOnce(false);
+  mockedFindUserByUsername.mockReturnValueOnce(undefined);
   mockedFindUserbyEmail.mockReturnValueOnce(undefined);
 
   const response = await request(app)
@@ -61,7 +58,7 @@ test('should return validation error on invalid submitted data', async () => {
 });
 
 test('should return an error if user with provided username already exists', async () => {
-  mockedCheckUsernameDuplication.mockReturnValueOnce(true);
+  mockedFindUserByUsername.mockReturnValueOnce({} as User);
   const response = await request(app)
     .post('/sign-up')
     .send(mockedSubmittedData);

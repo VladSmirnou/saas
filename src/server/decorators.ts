@@ -26,7 +26,11 @@ const withSession = (handler: RequestHandlerWithSession) => {
     } catch (error) {
       console.log(error);
       if (sessionValue !== undefined) {
-        res.clearCookie(SESSION_ID_NAME);
+        res.clearCookie(SESSION_ID_NAME, {
+          secure: true,
+          httpOnly: true,
+        });
+        res.set('clear-site-data', '"cookies", "cache"');
       }
       return res.sendStatus(401);
     }
@@ -72,9 +76,15 @@ const withIsLoggedInCheck = (handler: RequestHandlerWithSession) => {
       } catch (error) {
         console.log(error);
       }
-      res.clearCookie(SESSION_ID_NAME);
+      res.set('clear-site-data', '"cookies", "cache"');
+      res.clearCookie(SESSION_ID_NAME, {
+        secure: true,
+        httpOnly: true,
+      });
       return res.sendStatus(401);
     }
+
+    repo.updateSessionIdleTimeout(session.id).catch(console.log);
 
     return await handler(req, res, next);
   });
@@ -102,7 +112,10 @@ const withSessionAndUser = (handler: RequestHandlerWithSessionAndUser) => {
       (req as RequestWithSessionAndUser).user = user;
     } catch (error) {
       console.log(error);
-      res.clearCookie(SESSION_ID_NAME);
+      res.clearCookie(SESSION_ID_NAME, {
+        secure: true,
+        httpOnly: true,
+      });
       return res.sendStatus(401);
     }
 

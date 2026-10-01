@@ -1,8 +1,13 @@
-import type { Session } from '../repo/db';
-import { repo } from '../repo/repo';
 import crypto from 'crypto';
+import {
+  CLEAR_EXPIRED_IDLE_TIME_SESSIONS_INTERVAL,
+  FAKE_USER,
+  HMAC_KEY,
+} from '../constants/session';
+import { type Session, type User } from '../repo/db';
+import { repo } from '../repo/repo';
 
-const HMAC_KEY = process.env.HMAC_SECRET_KEY as string;
+type FakeUser = typeof FAKE_USER;
 
 const getSessionInstanceBySessionValue = (sessionValue: string | undefined) => {
   if (!sessionValue) {
@@ -22,6 +27,7 @@ const getSessionInstanceBySessionValue = (sessionValue: string | undefined) => {
     throw new Error('session signature is invalid');
   }
 
+  // pessimistic checks
   let session;
   try {
     session = repo.findSessionByToken(token);
@@ -55,10 +61,27 @@ const safeCompareSessionSignatures = (a: string, b: string) => {
 
 const getEncryptedSessionToken = () => crypto.randomBytes(16).toString('hex');
 
+const isFakeUser = (user: User | FakeUser): user is FakeUser => {
+  return 'fake' in user;
+};
+
+const clearExpiredIdleTimeSessions = () => {
+  setTimeout(() => {
+    try {
+      repo.deleteSessionsWithExpiredIdleTimeout();
+    } catch (error) {
+      console.log('Failed to clear expired idle time sessions', error);
+    }
+    clearExpiredIdleTimeSessions();
+  }, CLEAR_EXPIRED_IDLE_TIME_SESSIONS_INTERVAL);
+};
+
 export {
-  getSessionInstanceBySessionValue,
-  isSessionFresh,
-  signSessionToken,
-  safeCompareSessionSignatures,
+  clearExpiredIdleTimeSessions,
   getEncryptedSessionToken,
+  getSessionInstanceBySessionValue,
+  isFakeUser,
+  isSessionFresh,
+  safeCompareSessionSignatures,
+  signSessionToken,
 };

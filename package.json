@@ -13,7 +13,8 @@
     "prepare": "husky",
     "typecheck": "tsc -b --noEmit",
     "lint-format-ts": "npm run typecheck && npm run lint && npm run prettier",
-    "server-tests": "vitest --mode server --config src/server/vitest.config.ts"
+    "server-tests": "vitest --mode server --config src/server/vitest.config.ts",
+    "server": "tsx --watch --env-file=.env.server src/server/app.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -72,14 +73,14 @@
     ]
   },
   "lint-staged": {
-    "src/!(server)/**/*.{js,ts,tsx}": [
+    "src/**/*.{js,ts,tsx}": [
       "prettier --write",
-      "eslint --fix",
+      "eslint --fix"
+    ],
+    "src/!(server)/**/*.{js,ts,tsx}": [
       "vitest run related --config ./vitest.config.ts --passWithNoTests"
     ],
     "src/server/**/*.{js,ts,tsx}": [
-      "prettier --write",
-      "eslint --fix",
       "vitest run related --mode server --config src/server/vitest.config.ts --passWithNoTests"
     ]
   }

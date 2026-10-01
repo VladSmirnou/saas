@@ -10,8 +10,6 @@ const comparePasswords = ({
 }: {
   raw: string;
   encrypted: string;
-}) => {
-  return raw.length === encrypted.length && bcrypt.compare(raw, encrypted);
-};
+}) => bcrypt.compare(raw, encrypted);
 
 export { hashPassword, comparePasswords };

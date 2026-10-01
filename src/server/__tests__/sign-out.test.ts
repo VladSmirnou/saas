@@ -1,5 +1,4 @@
 import request from 'supertest';
-import { expect, test, vitest } from 'vitest';
 import { app } from '../app';
 import { SESSION_ID_NAME } from '../constants/session';
 import { repo } from '../repo/repo';
@@ -26,27 +25,29 @@ test.beforeEach(() => {
   mockedFindFirst.mockReturnValueOnce(mockedSessionInstance);
 });
 
-test('successfull logout', async () => {
+test('successfull sign-out', async () => {
   const response = await request(app)
     .delete('/sign-out')
-    .set('cookie', `sid=${signedSessionIdValue}`);
+    .set('cookie', `${SESSION_ID_NAME}=${signedSessionIdValue}`);
   expect(mockedDelete).toHaveBeenCalledWith(sessionToken);
   expect(response.status).toBe(200);
+
   expect(response.headers['set-cookie']).toEqual(
     expect.arrayContaining([
-      `${SESSION_ID_NAME}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT`,
+      `${SESSION_ID_NAME}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure`,
     ]),
   );
+  expect(response.header['clear-site-data']).toBe('"cookies", "cache"');
 });
 
-test('error logout', async () => {
+test('error sign-out', async () => {
   mockedDelete.mockImplementationOnce(() => {
-    throw new Error('failed to logout');
+    throw new Error('failed to sign-out');
   });
 
   const response = await request(app)
     .delete('/sign-out')
-    .set('cookie', `sid=${signedSessionIdValue}`);
+    .set('cookie', `${SESSION_ID_NAME}=${signedSessionIdValue}`);
   expect(response.status).toBe(400);
   expect(response.body).toEqual({
     message: 'Failed to logout. Refresh your page and try again.',

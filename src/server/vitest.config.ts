@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
       clearMocks: true,
       mockReset: true,
       restoreMocks: true,
-      include: ['src/server/__tests__/*.{test,spec}.ts'],
+      include: ['src/server/__tests__/*.test.ts'],
     },
   });
 });

@@ -1,6 +1,46 @@
+import { IDLE_TIMEOUT } from '../constants/session';
+import type { MaybeValue } from '../types/common';
+import type { Repo } from '../types/repo';
 import { sessions, users, type Session, type User } from './db';
 
-export const repo = {
+export const repo: Repo = {
+  findSessionByToken(token: string): MaybeValue<Session> {
+    try {
+      return sessions.findFirst((q) => q.where({ token }));
+    } catch {
+      throw new Error(`failed to find a session by token: ${token}`);
+    }
+  },
+
+  findUserById(id: number): MaybeValue<User> {
+    try {
+      return users.findFirst((q) => q.where({ id }));
+    } catch {
+      throw new Error(`Failed to find a user by id: ${id}`);
+    }
+  },
+
+  findUserByEmail(email: string): MaybeValue<User> {
+    try {
+      return users.findFirst((q) => q.where({ email }));
+    } catch {
+      throw new Error(`Failed to find a user with email ${email}`);
+    }
+  },
+
+  deleteSessionsWithExpiredIdleTimeout() {
+    try {
+      sessions.deleteMany((q) =>
+        q.where({
+          updatedAt: (data) =>
+            new Date(data).getTime() < new Date().getTime() - IDLE_TIMEOUT,
+        }),
+      );
+    } catch {
+      throw new Error('failed to delete sessions with expired idle timeout');
+    }
+  },
+
   deleteSessionByToken(token: string) {
     try {
       sessions.delete((q) => q.where({ token }));
@@ -9,64 +49,50 @@ export const repo = {
     }
   },
 
-  findSessionByToken(token: string) {
-    try {
-      const session = sessions.findFirst((q) => q.where({ token }));
-      if (session) return Object.create(session) as Session;
-    } catch {
-      throw new Error(`failed to find a session by token: ${token}`);
-    }
-  },
-
-  findUserById(id: number) {
-    try {
-      const user = users.findFirst((q) => q.where({ id }));
-      if (user) return Object.create(user) as User;
-    } catch {
-      throw new Error(`Failed to find a user by id: ${id}`);
-    }
-  },
-
   async createSession({
     createdAt,
     expiresAt,
+    updatedAt,
     user,
     token,
   }: {
-    createdAt: number;
-    expiresAt: number;
+    createdAt: string;
+    expiresAt: string;
+    updatedAt: string;
     token: string;
     user: User;
-  }) {
+  }): Promise<Session> {
     try {
       const newSession = await sessions.create({
-        createdAt: new Date(createdAt).toISOString(),
-        expiresAt: new Date(expiresAt).toISOString(),
+        createdAt,
+        expiresAt,
+        updatedAt,
         user,
         token,
       });
-      return Object.create(newSession) as Session;
+      return newSession;
     } catch {
       throw new Error('Failed to create a session');
     }
   },
 
-  findUserByEmail(email: string) {
+  async updateSessionIdleTimeout(sessionId: number) {
     try {
-      const user = users.findFirst((q) => q.where({ email }));
-      if (user) return Object.create(user) as User;
+      await sessions.update(
+        (q) =>
+          q.where({
+            id: sessionId,
+          }),
+        {
+          data(session) {
+            session.updatedAt = new Date(Date.now()).toISOString();
+          },
+        },
+      );
     } catch {
-      throw new Error(`Failed to find a user with email ${email}`);
-    }
-  },
-
-  checkUsernameDuplication(username: string) {
-    try {
-      const user = users.findFirst((q) => q.where({ username }));
-      if (user) return true;
-      throw new Error('');
-    } catch {
-      return false;
+      throw new Error(
+        `failed to update session idle timeout. Session id: ${sessionId}`,
+      );
     }
   },
 
@@ -78,7 +104,7 @@ export const repo = {
     email: string;
     hashedPassword: string;
     username: string;
-  }) {
+  }): Promise<User> {
     try {
       return await users.create({
         email,
@@ -87,6 +113,14 @@ export const repo = {
       });
     } catch {
       throw new Error(`Failed to create a user with email: ${email}`);
+    }
+  },
+
+  findUserByUsername(username: string): MaybeValue<User> {
+    try {
+      return users.findFirst((q) => q.where({ username }));
+    } catch {
+      throw new Error(`failed to find users by username: ${username}`);
     }
   },
 };
