@@ -13,7 +13,7 @@
     "prepare": "husky",
     "typecheck": "tsc -b --noEmit",
     "lint-format-ts": "npm run typecheck && npm run lint && npm run prettier",
-    "server-tests": "vitest --mode server --config src/server/vitest.config.ts",
+    "server-tests": "vitest --mode server-test --config src/server/vitest.config.ts",
     "server": "tsx --watch --env-file=.env.server src/server/app.ts"
   },
   "dependencies": {
@@ -28,6 +28,8 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "pino-http": "^11.0.0",
+    "pino-pretty": "^13.1.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-error-boundary": "^6.1.2",

@@ -6,6 +6,7 @@ import {
 } from '../constants/session';
 import { type Session, type User } from '../repo/db';
 import { repo } from '../repo/repo';
+import { loggerInstance } from '../logger';
 
 type FakeUser = typeof FAKE_USER;
 
@@ -28,13 +29,7 @@ const getSessionInstanceBySessionValue = (sessionValue: string | undefined) => {
   }
 
   // pessimistic checks
-  let session;
-  try {
-    session = repo.findSessionByToken(token);
-  } catch (error) {
-    console.log(error);
-  }
-
+  const session = repo.findSessionByToken(token);
   if (!session) {
     throw new Error("session doesn't exist");
   }
@@ -70,7 +65,12 @@ const clearExpiredIdleTimeSessions = () => {
     try {
       repo.deleteSessionsWithExpiredIdleTimeout();
     } catch (error) {
-      console.log('Failed to clear expired idle time sessions', error);
+      loggerInstance.logger.error(
+        {
+          err: error,
+        },
+        'Failed to clear expired idle time sessions',
+      );
     }
     clearExpiredIdleTimeSessions();
   }, CLEAR_EXPIRED_IDLE_TIME_SESSIONS_INTERVAL);

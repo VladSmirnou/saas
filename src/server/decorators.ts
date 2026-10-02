@@ -4,7 +4,7 @@ import {
   getSessionInstanceBySessionValue,
   isSessionFresh,
 } from './lib/session-utils';
-import { sessions, type Session, type User } from './repo/db';
+import type { Session, User } from './repo/db';
 import { repo } from './repo/repo';
 
 type RequestWithSession = Request & {
@@ -24,13 +24,16 @@ const withSession = (handler: RequestHandlerWithSession) => {
       (req as RequestWithSession).session =
         getSessionInstanceBySessionValue(sessionValue);
     } catch (error) {
-      console.log(error);
+      req.log.error(
+        { err: error },
+        `Failed to find a session instance by session value. Provided session value: ${sessionValue}`,
+      );
       if (sessionValue !== undefined) {
         res.clearCookie(SESSION_ID_NAME, {
           secure: true,
           httpOnly: true,
         });
-        res.set('clear-site-data', '"cookies", "cache"');
+        res.set('clear-site-data', '"cache"');
       }
       return res.sendStatus(401);
     }
@@ -58,9 +61,12 @@ const withAuthenticatedResponse = (handler: RequestHandler) => {
     // try to delete stale session from the DB, but do not remove cookie,
     // because these routes might re-set the session cookie later
     try {
-      sessions.delete((q) => q.where({ token: session.token }));
+      repo.deleteSessionByToken(session.token);
     } catch (error) {
-      console.log(error);
+      req.log.error(
+        { err: error, decorator: withAuthenticatedResponse.name },
+        `Failed to delete a session by token: ${session.token}`,
+      );
     }
     // session doesn't exist -> going to the sign-in / sign-up handler
     return await handler(req, res, next);
@@ -72,11 +78,14 @@ const withIsLoggedInCheck = (handler: RequestHandlerWithSession) => {
     const session = req.session;
     if (!isSessionFresh(session)) {
       try {
-        sessions.delete((q) => q.where({ token: session.token }));
+        repo.deleteSessionByToken(session.token);
       } catch (error) {
-        console.log(error);
+        req.log.error(
+          { err: error, decorator: withIsLoggedInCheck.name },
+          `Failed to delete a session by token: ${session.token}`,
+        );
       }
-      res.set('clear-site-data', '"cookies", "cache"');
+      res.set('clear-site-data', '"cache"');
       res.clearCookie(SESSION_ID_NAME, {
         secure: true,
         httpOnly: true,
@@ -106,12 +115,15 @@ const withSessionAndUser = (handler: RequestHandlerWithSessionAndUser) => {
     try {
       const user = repo.findUserById(session.user.id);
       if (!user) {
-        sessions.delete((q) => q.where({ token: session.token }));
+        repo.deleteSessionByToken(session.token);
         throw new Error("User doesn't exist");
       }
       (req as RequestWithSessionAndUser).user = user;
     } catch (error) {
-      console.log(error);
+      req.log.error(
+        { err: error },
+        `Failed to find a user: ${session.user.email} by id: ${session.user.id}`,
+      );
       res.clearCookie(SESSION_ID_NAME, {
         secure: true,
         httpOnly: true,

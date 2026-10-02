@@ -12,6 +12,7 @@ import {
   withSession,
   withSessionAndUser,
 } from './decorators';
+import { FakeUserError } from './errors';
 import { getUserDTO } from './lib/get-user-dto';
 import { comparePasswords, hashPassword } from './lib/manage-password';
 import {
@@ -19,9 +20,10 @@ import {
   isFakeUser,
   signSessionToken,
 } from './lib/session-utils';
+import { loggerInstance } from './logger';
+import { users } from './repo/db';
 import { repo } from './repo/repo';
 import { signInSchema, signupSchema } from './validators';
-import { users } from './repo/db';
 
 const port = Number(process.env.PORT!);
 const host = process.env.HOST!;
@@ -35,6 +37,7 @@ app.use(
     credentials: true,
   }),
 );
+app.use(loggerInstance);
 
 app.get(
   '/user',
@@ -65,8 +68,7 @@ app.post(
       if (!user) {
         throw new Error("user doesn't exist");
       }
-    } catch (error) {
-      console.log(error);
+    } catch {
       user = FAKE_USER;
     }
 
@@ -77,50 +79,63 @@ app.post(
         raw: password,
         encrypted: userPassword,
       });
-      if (isFakeUser(user) || !isEqual) {
+      if (isFakeUser(user)) {
+        throw new FakeUserError();
+      }
+      if (!isEqual) {
         throw new Error("passwords don't match");
       }
     } catch (error) {
-      console.log(error);
+      if (error instanceof FakeUserError) {
+        const nestedError = error.error;
+        req.log.error({ err: nestedError }, nestedError.message);
+      } else {
+        req.log.error(
+          { err: error },
+          `Provided an incorrect password for an email: ${email}`,
+        );
+      }
       return res.status(401).json({
         server: 'invalid credentials',
       });
     }
 
-    const sessionToken = getEncryptedSessionToken();
+    const createdAt = Date.now();
+    const createdAtDate = new Date(createdAt).toISOString();
+    const sessionExpiresAt = createdAt + SESSION_ABSOLUTE_TIMEOUT_MS;
 
+    let newSession;
     try {
-      const createdAt = Date.now();
-      const createdAtDate = new Date(createdAt).toISOString();
-
-      const sessionExpiresAt = createdAt + SESSION_ABSOLUTE_TIMEOUT_MS;
-
-      const newSession = await repo.createSession({
+      newSession = await repo.createSession({
         createdAt: createdAtDate,
         updatedAt: createdAtDate,
         expiresAt: new Date(sessionExpiresAt).toISOString(),
         user,
-        token: sessionToken,
+        token: getEncryptedSessionToken(),
       });
-
-      const newSessionToken = newSession.token;
-      const newSessionSignature = signSessionToken(newSessionToken);
-      const signedSessionIdValue = `${newSessionToken}.${newSessionSignature}`;
-
-      res.cookie(SESSION_ID_NAME, signedSessionIdValue, {
-        maxAge: SESSION_ABSOLUTE_TIMEOUT_MS,
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-      });
-      res.set('cache-control', 'no-store');
-      return res.sendStatus(200);
     } catch (error) {
-      console.log(error);
+      req.log.error(
+        { err: error },
+        `Failed to create a session for a user: ${user.email}`,
+      );
       return res.status(401).json({
         server: 'invalid credentials',
       });
     }
+
+    const newSessionToken = newSession.token;
+    const newSessionSignature = signSessionToken(newSessionToken);
+    const signedSessionIdValue = `${newSessionToken}.${newSessionSignature}`;
+
+    res.cookie(SESSION_ID_NAME, signedSessionIdValue, {
+      maxAge: SESSION_ABSOLUTE_TIMEOUT_MS,
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+    });
+    res.set('cache-control', 'no-store');
+    req.log.info(`User ${user.email} has logged in successfully.`);
+    return res.sendStatus(200);
   }),
 );
 
@@ -155,11 +170,17 @@ app.post(
     try {
       userByEmail = repo.findUserByEmail(email);
     } catch (error) {
-      console.log(error);
+      req.log.error(
+        { err: error },
+        `Failed to find a user by email ${userByEmail}`,
+      );
       return res.status(400).json({ server: 'Failed to sign-up' });
     }
 
     if (userByEmail) {
+      req.log.warn(
+        `An attemp to sign-up with an existing email: ${userByEmail}`,
+      );
       return res.sendStatus(201);
     }
 
@@ -187,12 +208,18 @@ app.delete(
       secure: true,
       httpOnly: true,
     });
-    res.set('clear-site-data', '"cookies", "cache"');
+    res.set('clear-site-data', '"cache"');
     try {
       repo.deleteSessionByToken(session.token);
+      req.log.info(
+        `User with email: ${session.user.email} has logged out. Session: ${session.token} was successfully terminated.`,
+      );
       res.sendStatus(200);
     } catch (error) {
-      console.log(error);
+      req.log.error(
+        { err: error, userId: session.user.id, sessionToken: session.token },
+        'An error occured trying to delete a session in "/sign-out" endpoint',
+      );
       res.status(400).json({
         message: 'Failed to logout. Refresh your page and try again.',
       });
@@ -201,14 +228,14 @@ app.delete(
 );
 
 app.listen(port, host, () => {
-  console.log('server is listening on port:', port);
   import('./lib/seed-db')
     .then(() => {
-      console.log('successfully seeded the DB');
+      loggerInstance.logger.info('successfully seeded the DB');
     })
     .then(() => {
       import('./lib/start-jobs').then(() => {
-        console.log('all jobs started successfully');
+        loggerInstance.logger.info('all jobs started successfully');
+        loggerInstance.logger.info(`server is listening on port:, ${port}`);
       });
     });
 });
