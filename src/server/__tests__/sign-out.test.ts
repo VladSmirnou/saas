@@ -4,8 +4,9 @@ import request from 'supertest';
 import { app } from '../app';
 import { SESSION_ID_NAME } from '../constants/session';
 import {
-  getEncryptedSessionToken,
-  signSessionToken,
+  createSessionIdValue,
+  getRawSessionTokenAndSecret,
+  hashSessionSecret,
 } from '../lib/session-utils';
 import type { Session } from '../repo/db';
 import { repo } from '../repo/repo';
@@ -37,31 +38,35 @@ vi.mock('pino-http', async (loadOriginal) => {
   };
 });
 
-const sessionToken = getEncryptedSessionToken();
-const newSessionSignature = signSessionToken(sessionToken);
-const signedSessionIdValue = `${sessionToken}.${newSessionSignature}`;
+const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
+
+const sessionIdValue = createSessionIdValue({
+  rawSessionToken,
+  rawSessionSecret,
+});
 
 const mockedSessionInstance = {
-  token: sessionToken,
+  token: rawSessionToken,
   user: {
     id: 1,
     email: 'my-email',
   },
+  secret: hashSessionSecret(rawSessionSecret),
 } as Session;
 
 const mockedDelete = vitest.mocked(repo.deleteSessionByToken);
-const mockedFindFirst = vitest.mocked(repo.findSessionByToken);
+const mockedFindSessionByToken = vitest.mocked(repo.findSessionByToken);
 
 test.beforeEach(() => {
-  mockedFindFirst.mockReturnValueOnce(mockedSessionInstance);
+  mockedFindSessionByToken.mockReturnValueOnce(mockedSessionInstance);
 });
 
 test('successfull sign-out', async () => {
   const response = await request(app)
     .delete('/sign-out')
-    .set('cookie', `${SESSION_ID_NAME}=${signedSessionIdValue}`);
+    .set('cookie', `${SESSION_ID_NAME}=${sessionIdValue}`);
 
-  expect(mockedDelete).toHaveBeenCalledWith(sessionToken);
+  expect(mockedDelete).toHaveBeenCalledWith(rawSessionToken);
   expect(mockLogInfo.mock.calls).toEqual(
     expect.arrayContaining([
       expect.arrayContaining([
@@ -87,7 +92,7 @@ test('error sign-out', async () => {
 
   const response = await request(app)
     .delete('/sign-out')
-    .set('cookie', `${SESSION_ID_NAME}=${signedSessionIdValue}`);
+    .set('cookie', `${SESSION_ID_NAME}=${sessionIdValue}`);
 
   expect(response.status).toBe(400);
   expect(response.body).toEqual({

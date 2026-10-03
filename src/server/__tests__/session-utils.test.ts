@@ -1,12 +1,14 @@
 import { describe, expect, test, vi, vitest } from 'vitest';
 import { IDLE_TIMEOUT } from '../constants/session';
 import {
+  clearExpiredIdleTimeSessions,
+  createSessionIdValue,
+  getRawSessionTokenAndSecret,
   getSessionInstanceBySessionValue,
+  hashSessionSecret,
   isFakeUser,
   isSessionFresh,
   safeCompareSessionSignatures,
-  signSessionToken,
-  clearExpiredIdleTimeSessions,
 } from '../lib/session-utils';
 import type { Session, User } from '../repo/db';
 import { repo } from '../repo/repo';
@@ -20,22 +22,22 @@ const mockedDeleteSessionsWithExpiredIdleTimeout = vitest.mocked(
 
 describe('safeCompareSessionSignatures', () => {
   test('should return false if strings have different length', () => {
-    const a = '123';
-    const b = '1234';
+    const a = 'abcd';
+    const b = 'abcde';
 
     expect(safeCompareSessionSignatures(a, b)).toBeFalsy();
   });
 
   test('should return false if strings are different', () => {
-    const a = '123';
-    const b = '122';
+    const a = 'abcd';
+    const b = 'abce';
 
     expect(safeCompareSessionSignatures(a, b)).toBeFalsy();
   });
 
   test('should return true if strings are the same', () => {
-    const a = '123';
-    const b = '123';
+    const a = 'abcd';
+    const b = 'abcd';
 
     expect(safeCompareSessionSignatures(a, b)).toBeTruthy();
   });
@@ -63,11 +65,16 @@ describe('isSessionFresh', () => {
 
 describe('getSessionInstanceBySessionValue', () => {
   test('should return session if session value is correct', () => {
-    const mockedSession = {} as Session;
-    const token = '123';
-    const signature = signSessionToken(token);
+    const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
 
-    const sessionValue = `${token}.${signature}`;
+    const sessionValue = createSessionIdValue({
+      rawSessionToken,
+      rawSessionSecret,
+    });
+
+    const mockedSession = {
+      secret: hashSessionSecret(rawSessionSecret),
+    } as Session;
 
     mockedFindSessionByToken.mockReturnValue(mockedSession);
 
@@ -91,21 +98,14 @@ describe('getSessionInstanceBySessionValue', () => {
     );
   });
 
-  test('should throw if a session signature is invalid', () => {
-    const sessionValue = '123.321';
-    const errorMessage = 'session signature is invalid';
-
-    expect(() => getSessionInstanceBySessionValue(sessionValue)).toThrow(
-      errorMessage,
-    );
-  });
-
   test("should throw if a session doesn't exist", () => {
     const errorMessage = "session doesn't exist";
-    const token = '123';
-    const signature = signSessionToken(token);
+    const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
 
-    const sessionValue = `${token}.${signature}`;
+    const sessionValue = createSessionIdValue({
+      rawSessionToken,
+      rawSessionSecret,
+    });
 
     mockedFindSessionByToken.mockImplementationOnce(() => {
       throw new Error(errorMessage);
@@ -139,6 +139,21 @@ describe('clearExpiredIdleTimeSessions', () => {
     vi.advanceTimersByTime(IDLE_TIMEOUT * callTimes);
     expect(mockedDeleteSessionsWithExpiredIdleTimeout).toHaveBeenCalledTimes(
       callTimes,
+    );
+  });
+});
+
+describe('createSessionIdValue', () => {
+  test('should correctly construct session id value', () => {
+    const sessionIdRawValues = {
+      rawSessionToken: 'my-token',
+      rawSessionSecret: 'my-secret',
+    };
+    const sessionValue = createSessionIdValue(sessionIdRawValues);
+
+    expect(sessionValue.split('.')).toHaveLength(2);
+    expect(sessionValue).toMatch(
+      `${sessionIdRawValues.rawSessionToken}.${sessionIdRawValues.rawSessionSecret}`,
     );
   });
 });

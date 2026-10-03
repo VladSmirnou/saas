@@ -11,7 +11,7 @@ const loggerInstance = pino({
         options: {
           colorize: true,
           translateTime: 'SYS:standard',
-          ignore: 'pid,hostname,req,res,responseTime',
+          ignore: 'pid,hostname,req,res,err,responseTime',
         },
       }
     : undefined,

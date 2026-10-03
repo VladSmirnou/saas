@@ -2,11 +2,11 @@ import crypto from 'crypto';
 import {
   CLEAR_EXPIRED_IDLE_TIME_SESSIONS_INTERVAL,
   FAKE_USER,
-  HMAC_KEY,
 } from '../constants/session';
 import { type Session, type User } from '../repo/db';
 import { repo } from '../repo/repo';
 import { loggerInstance } from '../logger';
+import { getEncryptedString } from './get-encrypted-string';
 
 type FakeUser = typeof FAKE_USER;
 
@@ -20,39 +20,35 @@ const getSessionInstanceBySessionValue = (sessionValue: string | undefined) => {
     throw new Error('invalid session id value');
   }
 
-  const [token, sessionSignature] = splitSessionIdValue;
+  const [rawToken, rawSecret] = splitSessionIdValue;
 
-  const signature = signSessionToken(token);
-
-  if (!safeCompareSessionSignatures(sessionSignature, signature)) {
-    throw new Error('session signature is invalid');
-  }
-
-  // pessimistic checks
-  const session = repo.findSessionByToken(hashSessionToken(token));
+  const session = repo.findSessionByToken(rawToken);
   if (!session) {
     throw new Error("session doesn't exist");
   }
+
+  const hashedIncommingSecret = hashSessionSecret(rawSecret);
+
+  if (!safeCompareSessionSignatures(session.secret, hashedIncommingSecret)) {
+    throw new Error("session secrets don't match");
+  }
+
   return session;
 };
 
 const isSessionFresh = (session: Session) =>
   new Date(session.expiresAt).getTime() > new Date().getTime();
 
-const signSessionToken = (token: string) =>
-  crypto.createHmac('sha256', HMAC_KEY).update(token).digest('hex');
-
 const safeCompareSessionSignatures = (a: string, b: string) => {
-  const bufferA = Buffer.from(a);
-  const bufferB = Buffer.from(b);
+  if (a.length !== b.length) {
+    return false;
+  }
 
-  return (
-    bufferA.length === bufferB.length &&
-    crypto.timingSafeEqual(bufferA, bufferB)
-  );
+  const bufferA = Buffer.from(a, 'hex');
+  const bufferB = Buffer.from(b, 'hex');
+
+  return crypto.timingSafeEqual(bufferA, bufferB);
 };
-
-const getEncryptedSessionToken = () => crypto.randomBytes(16).toString('hex');
 
 const isFakeUser = (user: User | FakeUser): user is FakeUser => 'fake' in user;
 
@@ -72,22 +68,33 @@ const clearExpiredIdleTimeSessions = () => {
   }, CLEAR_EXPIRED_IDLE_TIME_SESSIONS_INTERVAL);
 };
 
-const hashSessionToken = (sessionToken: string) =>
-  crypto.createHash('sha256').update(sessionToken).digest('hex');
+const hashSessionSecret = (sessionSecret: string) =>
+  crypto.createHash('sha256').update(sessionSecret).digest('hex');
 
-const createSessionIdValue = (sessionToken: string) => {
-  const newSessionSignature = signSessionToken(sessionToken);
-  return `${sessionToken}.${newSessionSignature}`;
+const createSessionIdValue = ({
+  rawSessionToken,
+  rawSessionSecret,
+}: {
+  rawSessionToken: string;
+  rawSessionSecret: string;
+}) => {
+  return `${rawSessionToken}.${rawSessionSecret}`;
+};
+
+const getRawSessionTokenAndSecret = () => {
+  return {
+    rawSessionToken: getEncryptedString(16),
+    rawSessionSecret: getEncryptedString(32),
+  };
 };
 
 export {
   clearExpiredIdleTimeSessions,
-  getEncryptedSessionToken,
   getSessionInstanceBySessionValue,
   isFakeUser,
   isSessionFresh,
   safeCompareSessionSignatures,
-  signSessionToken,
-  hashSessionToken,
+  hashSessionSecret,
   createSessionIdValue,
+  getRawSessionTokenAndSecret,
 };

@@ -3,18 +3,18 @@ import request from 'supertest';
 import { expect, test, vitest } from 'vitest';
 import { app } from '../app';
 import {
+  FAKE_USER,
   SESSION_ABSOLUTE_TIMEOUT_MS,
   SESSION_ID_NAME,
-  FAKE_USER,
 } from '../constants/session';
 import { comparePasswords } from '../lib/manage-password';
 import {
-  getEncryptedSessionToken,
-  hashSessionToken,
+  createSessionIdValue,
+  getRawSessionTokenAndSecret,
+  hashSessionSecret,
   isFakeUser,
-  signSessionToken,
 } from '../lib/session-utils';
-import type { Session, User } from '../repo/db';
+import type { User } from '../repo/db';
 import { repo } from '../repo/repo';
 
 vitest.mock('../repo/repo');
@@ -31,6 +31,7 @@ vitest.mock(import('../lib/session-utils'), async (importOriginal) => {
   return {
     ...mod,
     getEncryptedSessionToken: vi.fn(),
+    getRawSessionTokenAndSecret: vi.fn(),
     isFakeUser: vi.fn() as unknown as typeof isFakeUser,
   };
 });
@@ -38,18 +39,20 @@ vitest.mock(import('../lib/session-utils'), async (importOriginal) => {
 const mockedFindUserbyEmail = vitest.mocked(repo.findUserByEmail);
 const mockedCreateSession = vitest.mocked(repo.createSession);
 const mockedComparePasswords = vitest.mocked(comparePasswords);
-const mockedGetEncryptedSessionToken = vitest.mocked(getEncryptedSessionToken);
 const mockedIsFakeUser = vitest.mocked(isFakeUser);
+const mockedGetRawSessionTokenAndSecret = vitest.mocked(
+  getRawSessionTokenAndSecret,
+);
 
 const mockUser = {
   id: 1,
   username: 'bob',
-  password: 'some-hash',
+  password: '$2b$10$I03nIIzrjQin51qNk.nB.eV1QIe4FF5GjYXUoL5u0FBFuYNN2PEVe',
 } as User;
 
-const mockedSession = {
-  token: 'my-token',
-} as Session;
+const rawSessionToken = 'my-token';
+const rawSessionSecret = 'my-secret';
+const hashedSessionSecret = hashSessionSecret(rawSessionSecret);
 
 const mockedSubmittedData = {
   email: 'my-email@gmail.com',
@@ -64,14 +67,15 @@ test('should sign-in successfully', async () => {
   vitest.spyOn(Date, 'now').mockReturnValue(mockedTimeNow);
   mockedFindUserbyEmail.mockReturnValueOnce(mockUser);
   mockedComparePasswords.mockResolvedValueOnce(true);
-  mockedCreateSession.mockResolvedValueOnce(mockedSession);
-  mockedGetEncryptedSessionToken.mockReturnValueOnce(mockedSession.token);
+  mockedGetRawSessionTokenAndSecret.mockReturnValueOnce({
+    rawSessionToken,
+    rawSessionSecret,
+  });
 
   const response = await request(app)
     .post('/sign-in')
     .send(mockedSubmittedData);
 
-  const signature = signSessionToken(mockedSession.token);
   const cookiesArray = response.headers['set-cookie'] as unknown as string[];
 
   expect(cookiesArray).toBeDefined();
@@ -88,10 +92,15 @@ test('should sign-in successfully', async () => {
     updatedAt: createdAtDate,
     expiresAt: new Date(sessionExpiresAt).toISOString(),
     user: mockUser,
-    token: hashSessionToken(mockedSession.token),
+    token: rawSessionToken,
+    secret: hashedSessionSecret,
   });
+
   expect(parsedCookie).toEqual({
-    [SESSION_ID_NAME]: `${mockedSession.token}.${signature}`,
+    [SESSION_ID_NAME]: createSessionIdValue({
+      rawSessionToken,
+      rawSessionSecret,
+    }),
     'Max-Age': String(SESSION_ABSOLUTE_TIMEOUT_MS / 1000),
     Path: '/',
     Expires: expect.any(String),
@@ -126,7 +135,7 @@ test('should return validation error on invalid submitted data', async () => {
   });
 });
 
-test("should check fake user password when email doesn't exist and return a generic error", async () => {
+test("should go to the fake user path when email doesn't exist and return a generic error", async () => {
   mockedFindUserbyEmail.mockImplementationOnce(() => {
     throw new Error('failed to find a user');
   });

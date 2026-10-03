@@ -55,12 +55,14 @@ export const repo: Repo = {
     updatedAt,
     user,
     token,
+    secret,
   }: {
     createdAt: string;
     expiresAt: string;
     updatedAt: string;
     token: string;
     user: User;
+    secret: string;
   }): Promise<Session> {
     try {
       const newSession = await sessions.create({
@@ -69,6 +71,7 @@ export const repo: Repo = {
         updatedAt,
         user,
         token,
+        secret,
       });
       return newSession;
     } catch {

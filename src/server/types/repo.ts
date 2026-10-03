@@ -24,11 +24,13 @@ export type Repo = {
     updatedAt,
     user,
     token,
+    secret,
   }: {
     createdAt: string;
     expiresAt: string;
     updatedAt: string;
     token: string;
+    secret: string;
     user: User;
   }): Promise<Session>;
 };

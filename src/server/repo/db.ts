@@ -22,6 +22,7 @@ let nextSessionId = 1;
 const sessionSchema = z.object({
   id: z.number().default(() => nextSessionId++),
   token: z.string(),
+  secret: z.string(),
   expiresAt: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),

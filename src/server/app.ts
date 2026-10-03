@@ -17,8 +17,8 @@ import { getUserDTO } from './lib/get-user-dto';
 import { comparePasswords, hashPassword } from './lib/manage-password';
 import {
   createSessionIdValue,
-  getEncryptedSessionToken,
-  hashSessionToken,
+  getRawSessionTokenAndSecret,
+  hashSessionSecret,
   isFakeUser,
 } from './lib/session-utils';
 import { loggerInstance } from './logger';
@@ -79,6 +79,7 @@ app.post(
         raw: password,
         encrypted: userPassword,
       });
+
       if (isFakeUser(user)) {
         throw new FakeUserError();
       }
@@ -104,7 +105,7 @@ app.post(
     const createdAtDate = new Date(createdAt).toISOString();
     const sessionExpiresAt = createdAt + SESSION_ABSOLUTE_TIMEOUT_MS;
 
-    const sessionToken = getEncryptedSessionToken();
+    const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
 
     try {
       await repo.createSession({
@@ -112,7 +113,8 @@ app.post(
         updatedAt: createdAtDate,
         expiresAt: new Date(sessionExpiresAt).toISOString(),
         user,
-        token: hashSessionToken(sessionToken),
+        token: rawSessionToken,
+        secret: hashSessionSecret(rawSessionSecret),
       });
     } catch (error) {
       req.log.error(
@@ -124,12 +126,16 @@ app.post(
       });
     }
 
-    res.cookie(SESSION_ID_NAME, createSessionIdValue(sessionToken), {
-      maxAge: SESSION_ABSOLUTE_TIMEOUT_MS,
-      httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
-    });
+    res.cookie(
+      SESSION_ID_NAME,
+      createSessionIdValue({ rawSessionToken, rawSessionSecret }),
+      {
+        maxAge: SESSION_ABSOLUTE_TIMEOUT_MS,
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+      },
+    );
     res.set('cache-control', 'no-store');
     req.log.info(`User ${user.email} has logged in successfully.`);
     return res.sendStatus(200);

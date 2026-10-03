@@ -30,6 +30,7 @@ const sessionDataWithNoUser: Omit<Session, 'user'> = {
   updatedAt: createdAtDate,
   expiresAt: new Date(timeNow + SESSION_ABSOLUTE_TIMEOUT_MS).toISOString(),
   token: 'token',
+  secret: 'secret',
 };
 
 const getRepoInterfaceTests = (repo: Repo) => {
@@ -62,6 +63,7 @@ const getRepoInterfaceTests = (repo: Repo) => {
               createdAt: '',
               expiresAt: '',
               token: '',
+              secret: '',
               updatedAt: '',
               user: {} as User,
             }),
@@ -128,6 +130,7 @@ const getRepoInterfaceTests = (repo: Repo) => {
           expiresAt: 'date',
           updatedAt: 'date',
           token: 'random-token',
+          secret: 'random-secret',
         };
         const founduser = repo.findUserById(userData.id)!;
 
