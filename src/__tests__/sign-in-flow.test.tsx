@@ -6,15 +6,6 @@ import { createUrl } from '../lib/create-url';
 import { RouterMock } from '../mocks/todolists-feature/router-mock';
 import { server } from '../mocks/todolists-feature/server';
 
-// fill form fields
-// submit form
-//  press submit button
-//  block submit button
-// process server response
-//  if error
-//   display error
-//  redirect to the dashboard page
-
 test.beforeAll(() => server.listen());
 test.afterEach(() => server.resetHandlers());
 test.afterAll(() => server.close());

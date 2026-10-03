@@ -4,7 +4,7 @@ import {
   getSessionInstanceBySessionValue,
   isSessionFresh,
 } from './lib/session-utils';
-import type { Session, User } from './repo/db';
+import type { Session } from './repo/db';
 import { repo } from './repo/repo';
 
 type RequestWithSession = Request & {
@@ -93,46 +93,17 @@ const withIsLoggedInCheck = (handler: RequestHandlerWithSession) => {
       return res.sendStatus(401);
     }
 
-    repo.updateSessionIdleTimeout(session.id).catch(console.log);
+    repo.updateSessionIdleTimeout(session.id).catch((error) => {
+      req.log.error(
+        {
+          err: error,
+        },
+        `Failed to update idle session timeout for the user ${session.user.email}`,
+      );
+    });
 
     return await handler(req, res, next);
   });
 };
 
-type RequestWithSessionAndUser = RequestWithSession & {
-  user: User;
-};
-
-type RequestHandlerWithSessionAndUser = (
-  req: RequestWithSessionAndUser,
-  res: Response,
-  next: NextFunction,
-) => ReturnType<RequestHandler>;
-
-const withSessionAndUser = (handler: RequestHandlerWithSessionAndUser) => {
-  return withIsLoggedInCheck(async (req, res, next) => {
-    const session = req.session;
-    try {
-      const user = repo.findUserById(session.user.id);
-      if (!user) {
-        repo.deleteSessionByToken(session.token);
-        throw new Error("User doesn't exist");
-      }
-      (req as RequestWithSessionAndUser).user = user;
-    } catch (error) {
-      req.log.error(
-        { err: error },
-        `Failed to find a user: ${session.user.email} by id: ${session.user.id}`,
-      );
-      res.clearCookie(SESSION_ID_NAME, {
-        secure: true,
-        httpOnly: true,
-      });
-      return res.sendStatus(401);
-    }
-
-    await handler(req as RequestWithSessionAndUser, res, next);
-  });
-};
-
-export { withAuthenticatedResponse, withSession, withSessionAndUser };
+export { withAuthenticatedResponse, withIsLoggedInCheck, withSession };

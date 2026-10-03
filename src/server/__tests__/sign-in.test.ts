@@ -10,6 +10,7 @@ import {
 import { comparePasswords } from '../lib/manage-password';
 import {
   getEncryptedSessionToken,
+  hashSessionToken,
   isFakeUser,
   signSessionToken,
 } from '../lib/session-utils';
@@ -24,7 +25,15 @@ vitest.mock(import('../lib/manage-password'), async (importOriginal) => {
     comparePasswords: vitest.fn(),
   };
 });
-vitest.mock('../lib/session-utils');
+
+vitest.mock(import('../lib/session-utils'), async (importOriginal) => {
+  const mod = await importOriginal();
+  return {
+    ...mod,
+    getEncryptedSessionToken: vi.fn(),
+    isFakeUser: vi.fn() as unknown as typeof isFakeUser,
+  };
+});
 
 const mockedFindUserbyEmail = vitest.mocked(repo.findUserByEmail);
 const mockedCreateSession = vitest.mocked(repo.createSession);
@@ -79,7 +88,7 @@ test('should sign-in successfully', async () => {
     updatedAt: createdAtDate,
     expiresAt: new Date(sessionExpiresAt).toISOString(),
     user: mockUser,
-    token: mockedSession.token,
+    token: hashSessionToken(mockedSession.token),
   });
   expect(parsedCookie).toEqual({
     [SESSION_ID_NAME]: `${mockedSession.token}.${signature}`,

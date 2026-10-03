@@ -29,20 +29,18 @@ const getSessionInstanceBySessionValue = (sessionValue: string | undefined) => {
   }
 
   // pessimistic checks
-  const session = repo.findSessionByToken(token);
+  const session = repo.findSessionByToken(hashSessionToken(token));
   if (!session) {
     throw new Error("session doesn't exist");
   }
   return session;
 };
 
-const isSessionFresh = (session: Session) => {
-  return new Date(session.expiresAt).getTime() > new Date().getTime();
-};
+const isSessionFresh = (session: Session) =>
+  new Date(session.expiresAt).getTime() > new Date().getTime();
 
-const signSessionToken = (token: string) => {
-  return crypto.createHmac('sha256', HMAC_KEY).update(token).digest('hex');
-};
+const signSessionToken = (token: string) =>
+  crypto.createHmac('sha256', HMAC_KEY).update(token).digest('hex');
 
 const safeCompareSessionSignatures = (a: string, b: string) => {
   const bufferA = Buffer.from(a);
@@ -56,9 +54,7 @@ const safeCompareSessionSignatures = (a: string, b: string) => {
 
 const getEncryptedSessionToken = () => crypto.randomBytes(16).toString('hex');
 
-const isFakeUser = (user: User | FakeUser): user is FakeUser => {
-  return 'fake' in user;
-};
+const isFakeUser = (user: User | FakeUser): user is FakeUser => 'fake' in user;
 
 const clearExpiredIdleTimeSessions = () => {
   setTimeout(() => {
@@ -76,6 +72,14 @@ const clearExpiredIdleTimeSessions = () => {
   }, CLEAR_EXPIRED_IDLE_TIME_SESSIONS_INTERVAL);
 };
 
+const hashSessionToken = (sessionToken: string) =>
+  crypto.createHash('sha256').update(sessionToken).digest('hex');
+
+const createSessionIdValue = (sessionToken: string) => {
+  const newSessionSignature = signSessionToken(sessionToken);
+  return `${sessionToken}.${newSessionSignature}`;
+};
+
 export {
   clearExpiredIdleTimeSessions,
   getEncryptedSessionToken,
@@ -84,4 +88,6 @@ export {
   isSessionFresh,
   safeCompareSessionSignatures,
   signSessionToken,
+  hashSessionToken,
+  createSessionIdValue,
 };

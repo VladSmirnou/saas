@@ -9,19 +9,19 @@ import {
 } from './constants/session';
 import {
   withAuthenticatedResponse,
+  withIsLoggedInCheck,
   withSession,
-  withSessionAndUser,
 } from './decorators';
 import { FakeUserError } from './errors';
 import { getUserDTO } from './lib/get-user-dto';
 import { comparePasswords, hashPassword } from './lib/manage-password';
 import {
+  createSessionIdValue,
   getEncryptedSessionToken,
+  hashSessionToken,
   isFakeUser,
-  signSessionToken,
 } from './lib/session-utils';
 import { loggerInstance } from './logger';
-import { users } from './repo/db';
 import { repo } from './repo/repo';
 import { signInSchema, signupSchema } from './validators';
 
@@ -41,8 +41,8 @@ app.use(loggerInstance);
 
 app.get(
   '/user',
-  withSessionAndUser((req, res) => {
-    return res.json({ user: getUserDTO(req.user) });
+  withIsLoggedInCheck((req, res) => {
+    return res.json({ user: getUserDTO(req.session.user) });
   }),
 );
 
@@ -104,14 +104,15 @@ app.post(
     const createdAtDate = new Date(createdAt).toISOString();
     const sessionExpiresAt = createdAt + SESSION_ABSOLUTE_TIMEOUT_MS;
 
-    let newSession;
+    const sessionToken = getEncryptedSessionToken();
+
     try {
-      newSession = await repo.createSession({
+      await repo.createSession({
         createdAt: createdAtDate,
         updatedAt: createdAtDate,
         expiresAt: new Date(sessionExpiresAt).toISOString(),
         user,
-        token: getEncryptedSessionToken(),
+        token: hashSessionToken(sessionToken),
       });
     } catch (error) {
       req.log.error(
@@ -123,11 +124,7 @@ app.post(
       });
     }
 
-    const newSessionToken = newSession.token;
-    const newSessionSignature = signSessionToken(newSessionToken);
-    const signedSessionIdValue = `${newSessionToken}.${newSessionSignature}`;
-
-    res.cookie(SESSION_ID_NAME, signedSessionIdValue, {
+    res.cookie(SESSION_ID_NAME, createSessionIdValue(sessionToken), {
       maxAge: SESSION_ABSOLUTE_TIMEOUT_MS,
       httpOnly: true,
       secure: true,
@@ -190,10 +187,14 @@ app.post(
         hashedPassword,
         username,
       });
-      console.log(users.findMany());
       res.sendStatus(201);
     } catch (error) {
-      console.log(error);
+      req.log.error(
+        {
+          err: error,
+        },
+        `Failed to create a user with email: ${email}`,
+      );
       return res.status(400).json({ server: 'Failed to create user' });
     }
   }),
