@@ -90,6 +90,16 @@ const getRepoInterfaceTests = (repo: Repo) => {
           errorText: `failed to find users by username: ${randomUsername}`,
           operation: repo.findUserByUsername.name,
         },
+        {
+          method: async () => repo.findUserByEmail(randomEmail),
+          errorText: `Failed to find a user with email ${randomEmail}`,
+          operation: repo.findUserByEmail.name,
+        },
+        {
+          method: async () => repo.deleteSessionsWithExpiredAbsoluteTimeout(),
+          errorText: 'failed to delete sessions with expired absolute timeout',
+          operation: repo.deleteSessionsWithExpiredAbsoluteTimeout.name,
+        },
       ])(
         `should throw a correct error message when $operation fails`,
         async ({ method, errorText }) => {
@@ -101,7 +111,7 @@ const getRepoInterfaceTests = (repo: Repo) => {
       test.for([
         () => repo.findSessionByToken(randomTokenName),
         () => repo.findUserById(randomId),
-        () => repo.findUserByEmail('email'),
+        () => repo.findUserByEmail(randomEmail),
         () => repo.findUserByUsername(randomUsername),
       ])('should return undefined when an entity is not found', (method) => {
         expect(method()).toBeUndefined();
@@ -211,6 +221,39 @@ const getRepoInterfaceTests = (repo: Repo) => {
         });
 
         repo.deleteSessionsWithExpiredIdleTimeout();
+
+        expect(
+          repo.findSessionByToken(sessionDataWithNoUser.token),
+        ).toBeUndefined();
+        expect(repo.findSessionByToken(session.token)).toEqual(session);
+
+        vi.setSystemTime(timeNow);
+      });
+
+      it('should delete session with expired absolute timeout', async () => {
+        const timeNowPlusAbsoluteTimeout =
+          timeNow + SESSION_ABSOLUTE_TIMEOUT_MS;
+        const createdAt = new Date(timeNowPlusAbsoluteTimeout).toISOString();
+
+        vi.setSystemTime(timeNowPlusAbsoluteTimeout + 1);
+
+        const newUser = await repo.createUser({
+          email: randomEmail,
+          hashedPassword: randomPassword,
+          username: userData.username,
+        });
+        const session = await repo.createSession({
+          ...sessionDataWithNoUser,
+          token: randomTokenName,
+          createdAt,
+          updatedAt: createdAt,
+          expiresAt: new Date(
+            timeNowPlusAbsoluteTimeout + SESSION_ABSOLUTE_TIMEOUT_MS,
+          ).toISOString(),
+          user: newUser,
+        });
+
+        repo.deleteSessionsWithExpiredAbsoluteTimeout();
 
         expect(
           repo.findSessionByToken(sessionDataWithNoUser.token),

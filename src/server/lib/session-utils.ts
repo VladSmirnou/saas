@@ -30,7 +30,7 @@ const getSessionInstanceBySessionValue = (sessionValue: string | undefined) => {
 
   const hashedIncommingSecret = hashSessionSecret(rawSecret);
 
-  if (!safeCompareSessionSignatures(session.secret, hashedIncommingSecret)) {
+  if (!safeCompareSessionHashedSecrets(session.secret, hashedIncommingSecret)) {
     throw new Error("session secrets don't match");
   }
 
@@ -40,7 +40,7 @@ const getSessionInstanceBySessionValue = (sessionValue: string | undefined) => {
 const isSessionFresh = (session: Session) =>
   new Date(session.expiresAt).getTime() > new Date().getTime();
 
-const safeCompareSessionSignatures = (a: string, b: string) => {
+const safeCompareSessionHashedSecrets = (a: string, b: string) => {
   if (a.length !== b.length) {
     return false;
   }
@@ -110,7 +110,7 @@ export {
   getSessionInstanceBySessionValue,
   isFakeUser,
   isSessionFresh,
-  safeCompareSessionSignatures,
+  safeCompareSessionHashedSecrets,
   hashSessionSecret,
   createSessionIdValue,
   getRawSessionTokenAndSecret,

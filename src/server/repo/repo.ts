@@ -49,7 +49,9 @@ export const repo: Repo = {
         }),
       );
     } catch {
-      throw new Error('failed to delete sessions with expired idle timeout');
+      throw new Error(
+        'failed to delete sessions with expired absolute timeout',
+      );
     }
   },
 

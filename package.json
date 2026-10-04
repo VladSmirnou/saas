@@ -9,11 +9,11 @@
     "lint": "eslint --fix",
     "prettier": "prettier --write .",
     "preview": "vite preview",
-    "test": "vitest",
+    "test": "vitest run --coverage",
     "prepare": "husky",
     "typecheck": "tsc -b --noEmit",
     "lint-format-ts": "npm run typecheck && npm run lint && npm run prettier",
-    "server-tests": "vitest --mode server-test --config src/server/vitest.config.ts",
+    "server-tests": "vitest --coverage --mode server-test --config src/server/vitest.config.ts",
     "server": "tsx --watch --env-file=.env.server src/server/app.ts"
   },
   "dependencies": {
@@ -54,6 +54,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.6.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",

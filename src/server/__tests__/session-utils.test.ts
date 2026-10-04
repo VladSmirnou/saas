@@ -12,7 +12,7 @@ import {
   hashSessionSecret,
   isFakeUser,
   isSessionFresh,
-  safeCompareSessionSignatures,
+  safeCompareSessionHashedSecrets,
 } from '../lib/session-utils';
 import type { Session, User } from '../repo/db';
 import { repo } from '../repo/repo';
@@ -27,26 +27,33 @@ const mockedDeleteSessionsWithExpiredAbsoluteTimeout = vitest.mocked(
   repo.deleteSessionsWithExpiredAbsoluteTimeout,
 );
 
+const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
+
+const sessionValue = createSessionIdValue({
+  rawSessionToken,
+  rawSessionSecret,
+});
+
 describe('safeCompareSessionSignatures', () => {
   test('should return false if strings have different length', () => {
     const a = 'abcd';
     const b = 'abcde';
 
-    expect(safeCompareSessionSignatures(a, b)).toBeFalsy();
+    expect(safeCompareSessionHashedSecrets(a, b)).toBeFalsy();
   });
 
   test('should return false if strings are different', () => {
     const a = 'abcd';
     const b = 'abce';
 
-    expect(safeCompareSessionSignatures(a, b)).toBeFalsy();
+    expect(safeCompareSessionHashedSecrets(a, b)).toBeFalsy();
   });
 
   test('should return true if strings are the same', () => {
     const a = 'abcd';
     const b = 'abcd';
 
-    expect(safeCompareSessionSignatures(a, b)).toBeTruthy();
+    expect(safeCompareSessionHashedSecrets(a, b)).toBeTruthy();
   });
 });
 
@@ -72,13 +79,6 @@ describe('isSessionFresh', () => {
 
 describe('getSessionInstanceBySessionValue', () => {
   test('should return session if session value is correct', () => {
-    const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
-
-    const sessionValue = createSessionIdValue({
-      rawSessionToken,
-      rawSessionSecret,
-    });
-
     const mockedSession = {
       secret: hashSessionSecret(rawSessionSecret),
     } as Session;
@@ -96,6 +96,26 @@ describe('getSessionInstanceBySessionValue', () => {
     );
   });
 
+  test('should throw an error when cannot find session by token', () => {
+    const errorMessage = "session doesn't exist";
+    expect(() => getSessionInstanceBySessionValue(sessionValue)).toThrow(
+      errorMessage,
+    );
+  });
+
+  test("should throw an error if hashed secrets don't match", () => {
+    const errorMessage = "session secrets don't match";
+    const mockedSession = {
+      secret: '123',
+    } as Session;
+
+    mockedFindSessionByToken.mockReturnValue(mockedSession);
+
+    expect(() => getSessionInstanceBySessionValue(sessionValue)).toThrow(
+      errorMessage,
+    );
+  });
+
   test("should throw if session id value doesn't split into token and signature correctly", () => {
     const sessionValue = '123';
     const errorMessage = 'invalid session id value';
@@ -107,12 +127,6 @@ describe('getSessionInstanceBySessionValue', () => {
 
   test("should throw if a session doesn't exist", () => {
     const errorMessage = "session doesn't exist";
-    const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
-
-    const sessionValue = createSessionIdValue({
-      rawSessionToken,
-      rawSessionSecret,
-    });
 
     mockedFindSessionByToken.mockImplementationOnce(() => {
       throw new Error(errorMessage);
@@ -164,6 +178,24 @@ describe('timers', () => {
         mockedDeleteSessionsWithExpiredAbsoluteTimeout,
       ).toHaveBeenCalledTimes(callTimes);
     });
+
+    // test('should log an error if failed to delete sessions', () => {
+    //   const error = new Error('');
+
+    //   mockedDeleteSessionsWithExpiredAbsoluteTimeout.mockImplementationOnce(
+    //     () => {
+    //       throw error;
+    //     },
+    //   );
+    //   clearExpiredAbsoluteTimeSessions();
+
+    //   vi.runOnlyPendingTimers();
+
+    //   expect(mockLogError).toHaveBeenCalledWith(
+    //     { err: error },
+    //     'Failed to clear expired absolute time sessions',
+    //   );
+    // });
   });
 });
 
@@ -179,5 +211,18 @@ describe('createSessionIdValue', () => {
     expect(sessionValue).toMatch(
       `${sessionIdRawValues.rawSessionToken}.${sessionIdRawValues.rawSessionSecret}`,
     );
+  });
+});
+
+describe('getRawSessionTokenAndSecret', () => {
+  test('should create a random session token and session secret of required length', () => {
+    const { rawSessionSecret, rawSessionToken } = getRawSessionTokenAndSecret();
+
+    expect(rawSessionSecret).toEqual(expect.any(String));
+    expect(rawSessionToken).toEqual(expect.any(String));
+    expect(rawSessionSecret).not.toBe(rawSessionToken);
+
+    expect(rawSessionToken).toHaveLength(32);
+    expect(rawSessionSecret).toHaveLength(64);
   });
 });

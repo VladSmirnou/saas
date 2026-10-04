@@ -14,6 +14,10 @@ export default defineConfig(({ mode }) => {
       mockReset: true,
       restoreMocks: true,
       include: ['src/server/__tests__/*.test.ts'],
+      coverage: {
+        provider: 'v8',
+        exclude: ['__mocks__/**'],
+      },
     },
   });
 });
