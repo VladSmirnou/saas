@@ -1,6 +1,5 @@
-import type { NextFunction, Request, Response } from 'express';
-import type { Options } from 'pino-http';
 import request from 'supertest';
+import { mockLogError, mockLogInfo } from '../../../__mocks__/pino-http';
 import { app } from '../app';
 import { SESSION_ID_NAME } from '../constants/session';
 import {
@@ -12,31 +11,7 @@ import type { Session } from '../repo/db';
 import { repo } from '../repo/repo';
 
 vitest.mock('../repo/repo');
-
-const { mockLogError, mockLogInfo } = vi.hoisted(() => {
-  return {
-    mockLogError: vi.fn(),
-    mockLogInfo: vi.fn(),
-  };
-});
-vi.mock('pino-http', async (loadOriginal) => {
-  const original = await loadOriginal<typeof import('pino-http')>();
-
-  return {
-    ...original,
-    default: (opts: Options) => {
-      const middleware = original.default(opts);
-
-      return (req: Request, res: Response, next: NextFunction) => {
-        middleware(req, res, () => {
-          req.log.error = mockLogError;
-          req.log.info = mockLogInfo;
-          next();
-        });
-      };
-    },
-  };
-});
+vitest.mock('pino-http');
 
 const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
 
@@ -70,7 +45,7 @@ test('successfull sign-out', async () => {
   expect(mockLogInfo.mock.calls).toEqual(
     expect.arrayContaining([
       expect.arrayContaining([
-        expect.stringContaining(mockedSessionInstance.user.email),
+        expect.stringContaining(String(mockedSessionInstance.user.id)),
         expect.stringContaining(mockedSessionInstance.token),
       ]),
     ]),

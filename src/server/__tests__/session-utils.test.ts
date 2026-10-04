@@ -1,6 +1,10 @@
 import { describe, expect, test, vi, vitest } from 'vitest';
-import { IDLE_TIMEOUT } from '../constants/session';
 import {
+  CLEAR_EXPIRED_ABSOLUTE_TIME_SESSIONS_INTERVAL,
+  IDLE_TIMEOUT_MS,
+} from '../constants/session';
+import {
+  clearExpiredAbsoluteTimeSessions,
   clearExpiredIdleTimeSessions,
   createSessionIdValue,
   getRawSessionTokenAndSecret,
@@ -18,6 +22,9 @@ vitest.mock('../repo/repo');
 const mockedFindSessionByToken = vitest.mocked(repo.findSessionByToken);
 const mockedDeleteSessionsWithExpiredIdleTimeout = vitest.mocked(
   repo.deleteSessionsWithExpiredIdleTimeout,
+);
+const mockedDeleteSessionsWithExpiredAbsoluteTimeout = vitest.mocked(
+  repo.deleteSessionsWithExpiredAbsoluteTimeout,
 );
 
 describe('safeCompareSessionSignatures', () => {
@@ -124,7 +131,7 @@ describe('isFakeUser', () => {
   });
 });
 
-describe('clearExpiredIdleTimeSessions', () => {
+describe('timers', () => {
   test.beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -132,14 +139,31 @@ describe('clearExpiredIdleTimeSessions', () => {
     vi.useRealTimers();
   });
 
-  test('should be called a proper amount of times in a given time interval', () => {
-    const callTimes = 5;
-    clearExpiredIdleTimeSessions();
+  const callTimes = 5;
+  describe('clearExpiredIdleTimeSessions', () => {
+    test('should be called a proper amount of times in a given time interval', () => {
+      clearExpiredIdleTimeSessions();
 
-    vi.advanceTimersByTime(IDLE_TIMEOUT * callTimes);
-    expect(mockedDeleteSessionsWithExpiredIdleTimeout).toHaveBeenCalledTimes(
-      callTimes,
-    );
+      vi.advanceTimersByTime(IDLE_TIMEOUT_MS * callTimes);
+
+      expect(mockedDeleteSessionsWithExpiredIdleTimeout).toHaveBeenCalledTimes(
+        callTimes,
+      );
+    });
+  });
+
+  describe('clearExpiredAbsoluteTimeSessions', () => {
+    test('should be called a proper amount of times in a given time interval', () => {
+      clearExpiredAbsoluteTimeSessions();
+
+      vi.advanceTimersByTime(
+        CLEAR_EXPIRED_ABSOLUTE_TIME_SESSIONS_INTERVAL * callTimes,
+      );
+
+      expect(
+        mockedDeleteSessionsWithExpiredAbsoluteTimeout,
+      ).toHaveBeenCalledTimes(callTimes);
+    });
   });
 });
 

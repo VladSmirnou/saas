@@ -1,5 +1,5 @@
 import {
-  IDLE_TIMEOUT,
+  IDLE_TIMEOUT_MS,
   SESSION_ABSOLUTE_TIMEOUT_MS,
 } from '../constants/session';
 import type { User, Session } from '../repo/db';
@@ -176,7 +176,7 @@ const getRepoInterfaceTests = (repo: Repo) => {
       });
 
       it('should update session idle timeout', async () => {
-        vi.setSystemTime(timeNow + IDLE_TIMEOUT);
+        vi.setSystemTime(timeNow + IDLE_TIMEOUT_MS);
 
         await repo.updateSessionIdleTimeout(sessionDataWithNoUser.id);
 
@@ -184,7 +184,7 @@ const getRepoInterfaceTests = (repo: Repo) => {
           repo.findSessionByToken(sessionDataWithNoUser.token)?.updatedAt,
         ).toBe(
           new Date(
-            Date.parse(sessionDataWithNoUser.updatedAt) + IDLE_TIMEOUT,
+            Date.parse(sessionDataWithNoUser.updatedAt) + IDLE_TIMEOUT_MS,
           ).toISOString(),
         );
 
@@ -192,7 +192,7 @@ const getRepoInterfaceTests = (repo: Repo) => {
       });
 
       it('should delete session with expired idle timeout', async () => {
-        const timeNowPlusIdleTimeout = timeNow + IDLE_TIMEOUT;
+        const timeNowPlusIdleTimeout = timeNow + IDLE_TIMEOUT_MS;
         const createdAt = new Date(timeNowPlusIdleTimeout).toISOString();
 
         vi.setSystemTime(timeNowPlusIdleTimeout + 1);

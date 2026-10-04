@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import {
+  CLEAR_EXPIRED_ABSOLUTE_TIME_SESSIONS_INTERVAL,
   CLEAR_EXPIRED_IDLE_TIME_SESSIONS_INTERVAL,
   FAKE_USER,
 } from '../constants/session';
@@ -68,6 +69,22 @@ const clearExpiredIdleTimeSessions = () => {
   }, CLEAR_EXPIRED_IDLE_TIME_SESSIONS_INTERVAL);
 };
 
+const clearExpiredAbsoluteTimeSessions = () => {
+  setTimeout(() => {
+    try {
+      repo.deleteSessionsWithExpiredAbsoluteTimeout();
+    } catch (error) {
+      loggerInstance.logger.error(
+        {
+          err: error,
+        },
+        'Failed to clear expired absolute time sessions',
+      );
+    }
+    clearExpiredAbsoluteTimeSessions();
+  }, CLEAR_EXPIRED_ABSOLUTE_TIME_SESSIONS_INTERVAL);
+};
+
 const hashSessionSecret = (sessionSecret: string) =>
   crypto.createHash('sha256').update(sessionSecret).digest('hex');
 
@@ -97,4 +114,5 @@ export {
   hashSessionSecret,
   createSessionIdValue,
   getRawSessionTokenAndSecret,
+  clearExpiredAbsoluteTimeSessions,
 };

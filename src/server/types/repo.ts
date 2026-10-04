@@ -8,6 +8,7 @@ export type Repo = {
   findUserByUsername(username: string): MaybeValue<User>;
   deleteSessionByToken(token: string): void;
   deleteSessionsWithExpiredIdleTimeout(): void;
+  deleteSessionsWithExpiredAbsoluteTimeout(): void;
   updateSessionIdleTimeout(sessionId: number): Promise<void>;
   createUser({
     email,

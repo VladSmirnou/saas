@@ -1,4 +1,4 @@
-import { IDLE_TIMEOUT } from '../constants/session';
+import { IDLE_TIMEOUT_MS } from '../constants/session';
 import type { MaybeValue } from '../types/common';
 import type { Repo } from '../types/repo';
 import { sessions, users, type Session, type User } from './db';
@@ -33,7 +33,19 @@ export const repo: Repo = {
       sessions.deleteMany((q) =>
         q.where({
           updatedAt: (data) =>
-            new Date(data).getTime() < new Date().getTime() - IDLE_TIMEOUT,
+            new Date(data).getTime() < new Date().getTime() - IDLE_TIMEOUT_MS,
+        }),
+      );
+    } catch {
+      throw new Error('failed to delete sessions with expired idle timeout');
+    }
+  },
+
+  deleteSessionsWithExpiredAbsoluteTimeout() {
+    try {
+      sessions.deleteMany((q) =>
+        q.where({
+          expiresAt: (data) => new Date(data).getTime() < new Date().getTime(),
         }),
       );
     } catch {
@@ -65,7 +77,7 @@ export const repo: Repo = {
     secret: string;
   }): Promise<Session> {
     try {
-      const newSession = await sessions.create({
+      return await sessions.create({
         createdAt,
         expiresAt,
         updatedAt,
@@ -73,7 +85,6 @@ export const repo: Repo = {
         token,
         secret,
       });
-      return newSession;
     } catch {
       throw new Error('Failed to create a session');
     }
