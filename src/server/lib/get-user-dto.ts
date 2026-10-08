@@ -1,4 +1,4 @@
-import type { User } from '../repo/db';
+import type { User } from '../repo/types/entities';
 
 export const getUserDTO = (user: User) => {
   return {

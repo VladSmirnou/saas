@@ -1,10 +1,10 @@
 import request from 'supertest';
 import { mockLogError } from '../../../__mocks__/pino-http';
 import { app } from '../app';
-import type { User } from '../repo/db';
-import { repo } from '../repo/repo';
+import { repo } from '../repo/msw/repo';
+import type { User } from '../repo/types/entities';
 
-vitest.mock('../repo/repo');
+vitest.mock('../repo/msw/repo');
 vitest.mock('pino-http');
 
 const mockedFindUserByUsername = vitest.mocked(repo.findUserByUsername);
@@ -19,8 +19,8 @@ const mockedSubmittedData = {
 };
 
 test('should sign-up successfully', async () => {
-  mockedFindUserByUsername.mockReturnValueOnce(undefined);
-  mockedFindUserbyEmail.mockReturnValueOnce(undefined);
+  mockedFindUserByUsername.mockResolvedValueOnce(undefined);
+  mockedFindUserbyEmail.mockResolvedValueOnce(undefined);
 
   const response = await request(app)
     .post('/sign-up')
@@ -47,7 +47,7 @@ test('should return an error if failed to create a user', async () => {
 });
 
 test('should return an opaque success on existing user found by email', async () => {
-  mockedFindUserbyEmail.mockReturnValueOnce({} as User);
+  mockedFindUserbyEmail.mockResolvedValueOnce({} as User);
 
   const response = await request(app)
     .post('/sign-up')
@@ -71,7 +71,7 @@ test('should return validation error on invalid submitted data', async () => {
 });
 
 test('should return an error if user with provided username already exists', async () => {
-  mockedFindUserByUsername.mockReturnValueOnce({} as User);
+  mockedFindUserByUsername.mockResolvedValueOnce({} as User);
   const response = await request(app)
     .post('/sign-up')
     .send(mockedSubmittedData);

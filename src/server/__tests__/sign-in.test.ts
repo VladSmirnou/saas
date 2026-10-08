@@ -16,10 +16,10 @@ import {
   hashSessionSecret,
   isFakeUser,
 } from '../lib/session-utils';
-import type { User } from '../repo/db';
-import { repo } from '../repo/repo';
+import { repo } from '../repo/msw/repo';
+import type { User } from '../repo/types/entities';
 
-vitest.mock('../repo/repo');
+vitest.mock('../repo/msw/repo');
 vitest.mock('pino-http');
 vitest.mock(import('../lib/manage-password'), async (importOriginal) => {
   const mod = await importOriginal();
@@ -75,7 +75,7 @@ test('should sign-in successfully', async () => {
   const sessionExpiresAt = mockedTimeNow + SESSION_ABSOLUTE_TIMEOUT_MS;
 
   vitest.spyOn(Date, 'now').mockReturnValue(mockedTimeNow);
-  mockedFindUserbyEmail.mockReturnValueOnce(mockUser);
+  mockedFindUserbyEmail.mockResolvedValueOnce(mockUser);
 
   const response = await request(app)
     .post('/sign-in')
@@ -120,7 +120,7 @@ test('should sign-in successfully', async () => {
 test('should return an error response on session creation failure', async () => {
   const error = new Error('failed to create a session');
   mockedCreateSession.mockRejectedValueOnce(error);
-  mockedFindUserbyEmail.mockReturnValueOnce(mockUser);
+  mockedFindUserbyEmail.mockResolvedValueOnce(mockUser);
 
   const response = await request(app)
     .post('/sign-in')

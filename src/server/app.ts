@@ -22,7 +22,7 @@ import {
   isFakeUser,
 } from './lib/session-utils';
 import { loggerInstance } from './logger';
-import { repo } from './repo/repo';
+import { repo } from './repo/get-current-repo';
 import { signInSchema, signupSchema } from './validators';
 
 const port = Number(process.env.PORT!);
@@ -64,7 +64,7 @@ app.post(
 
     let user;
     try {
-      user = repo.findUserByEmail(email);
+      user = await repo.findUserByEmail(email);
       if (!user) {
         throw new Error("user doesn't exist");
       }
@@ -161,7 +161,7 @@ app.post(
 
     let user;
     try {
-      user = repo.findUserByUsername(username);
+      user = await repo.findUserByUsername(username);
     } catch (error) {
       req.log.error(
         {
@@ -184,7 +184,7 @@ app.post(
 
     let userByEmail;
     try {
-      userByEmail = repo.findUserByEmail(email);
+      userByEmail = await repo.findUserByEmail(email);
     } catch (error) {
       req.log.error({ err: error }, `Failed to find a user by email: ${email}`);
       return res.status(400).json({ server: 'Failed to sign-up' });
@@ -244,15 +244,19 @@ app.delete(
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(port, host, () => {
-    import('./lib/seed-db')
-      .then(() => {
-        loggerInstance.logger.info('successfully seeded the DB');
-      })
-      .then(() => {
-        import('./lib/start-jobs').then(() => {
-          loggerInstance.logger.info('all jobs started successfully');
-          loggerInstance.logger.info(`server is listening on port:, ${port}`);
-        });
-      });
+    import('./lib/start-jobs').then(() => {
+      loggerInstance.logger.info('all jobs started successfully');
+      loggerInstance.logger.info(`server is listening on port:, ${port}`);
+    });
   });
 }
+
+// Let's run tests for a repo that is currently in use
+
+// I need test configurations per repo
+// repoType -> configFile
+
+// configFile -> {
+//  a setup code path,
+//  tests to include path
+// }

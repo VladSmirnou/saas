@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
 import { getUserDTO } from '../lib/get-user-dto';
-import type { User } from '../repo/db';
 import { test } from 'vitest';
+import type { User } from '../repo/types/entities';
 
 const dbUser: User = {
   email: 'email',
@@ -9,6 +9,7 @@ const dbUser: User = {
   isEmailVerified: true,
   username: 'username',
   password: 'password',
+  role: null,
 };
 
 test('should return exposed user properties', () => {
@@ -17,5 +18,6 @@ test('should return exposed user properties', () => {
     id: 1,
     isEmailVerified: true,
     username: 'username',
+    role: null,
   });
 });

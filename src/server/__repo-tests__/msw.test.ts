@@ -1,11 +1,7 @@
 import { describe } from 'vitest';
-import { repo } from '../repo/repo';
-import {
-  getRepoInterfaceTests,
-  userData,
-  sessionDataWithNoUser,
-} from './repo.spec';
-import { sessions, users } from '../repo/db';
+import { resetAutoincrementIds, sessions, users } from '../repo/msw/models';
+import { repo } from '../repo/msw/repo';
+import { getRepoInterfaceTests } from './repo.spec';
 
 describe('msw-data repository', () => {
   const { errorTests, successTests } = getRepoInterfaceTests(repo);
@@ -28,21 +24,12 @@ describe('msw-data repository', () => {
   });
 
   describe('success tests', () => {
-    beforeEach(async () => {
-      const newUser = await users.create(userData);
-      await sessions.create({
-        ...sessionDataWithNoUser,
-        user: newUser,
-      });
-    });
     afterEach(() => {
       sessions.clear();
       users.clear();
+      resetAutoincrementIds();
     });
 
     successTests();
   });
 });
-
-// i need to have at least one user and one session before running
-// each test

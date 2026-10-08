@@ -4,11 +4,11 @@ import {
   getSessionInstanceBySessionValue,
   isSessionFresh,
 } from './lib/session-utils';
-import type { Session } from './repo/db';
-import { repo } from './repo/repo';
+import { repo } from './repo/msw/repo';
+import type { SessionWithUser } from './repo/types/entities';
 
 type RequestWithSession = Request & {
-  session: Session;
+  session: SessionWithUser;
 };
 
 type RequestHandlerWithSession = (
@@ -22,7 +22,7 @@ const withSession = (handler: RequestHandlerWithSession) => {
     const sessionValue = req.cookies[SESSION_ID_NAME] as string | undefined;
     try {
       (req as RequestWithSession).session =
-        getSessionInstanceBySessionValue(sessionValue);
+        await getSessionInstanceBySessionValue(sessionValue);
     } catch (error) {
       req.log.error(
         { err: error },
@@ -47,13 +47,13 @@ const withAuthenticatedResponse = (handler: RequestHandler) => {
     const sessionValue = req.cookies[SESSION_ID_NAME] as string | undefined;
     let session;
     try {
-      session = getSessionInstanceBySessionValue(sessionValue);
+      session = await getSessionInstanceBySessionValue(sessionValue);
     } catch {
       // session doesn't exist -> going to the sign-in / sign-up handler
       return await handler(req, res, next);
     }
 
-    if (isSessionFresh(session)) {
+    if (isSessionFresh(session.expiresAt)) {
       // session exists & fresh -> user is already signed-in
       return res.status(200).json({ authenticated: true });
     }
@@ -76,7 +76,7 @@ const withAuthenticatedResponse = (handler: RequestHandler) => {
 const withIsLoggedInCheck = (handler: RequestHandlerWithSession) => {
   return withSession(async (req, res, next) => {
     const session = req.session;
-    if (!isSessionFresh(session)) {
+    if (!isSessionFresh(session.expiresAt)) {
       try {
         repo.deleteSessionByToken(session.token);
       } catch (error) {

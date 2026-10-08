@@ -2,16 +2,12 @@ import {
   IDLE_TIMEOUT_MS,
   SESSION_ABSOLUTE_TIMEOUT_MS,
 } from '../constants/session';
-import type { User, Session } from '../repo/db';
-import type { Repo } from '../types/repo';
+import type { Repo, Session, User } from '../repo/types/repo';
 
 vi.setSystemTime(new Date('2000-01-01T00:00:00Z'));
 
 const randomTokenName = 'some token';
-const randomEmail = 'some email';
-const randomPassword = 'some password';
-const randomId = 11231;
-const randomUsername = 'username12123123123';
+const randomId = -1;
 
 const userData: User = {
   id: 1,
@@ -19,18 +15,26 @@ const userData: User = {
   email: 'email@gmail.com',
   password: 'password',
   isEmailVerified: false,
+  role: null,
+};
+
+const newUserPayload = {
+  email: 'some email',
+  password: 'some password',
+  username: 'username12123123123',
 };
 
 const timeNow = Date.now();
 const createdAtDate = new Date(timeNow).toISOString();
 
-const sessionDataWithNoUser: Omit<Session, 'user'> = {
+const sessionDataWithNoUser: Session = {
   id: 1,
   createdAt: createdAtDate,
   updatedAt: createdAtDate,
   expiresAt: new Date(timeNow + SESSION_ABSOLUTE_TIMEOUT_MS).toISOString(),
   token: 'token',
   secret: 'secret',
+  userId: 1,
 };
 
 const getRepoInterfaceTests = (repo: Repo) => {
@@ -44,7 +48,7 @@ const getRepoInterfaceTests = (repo: Repo) => {
         },
         {
           method: async () => repo.findUserById(randomId),
-          errorText: `Failed to find a user by id: ${randomId}`,
+          errorText: `failed to find a user by id: ${randomId}`,
           operation: repo.findUserById.name,
         },
         {
@@ -67,17 +71,17 @@ const getRepoInterfaceTests = (repo: Repo) => {
               updatedAt: '',
               user: {} as User,
             }),
-          errorText: 'Failed to create a session',
+          errorText: 'failed to create a session',
           operation: repo.createSession.name,
         },
         {
           method: async () =>
             repo.createUser({
-              email: 'some-email',
-              hashedPassword: '',
-              username: randomUsername,
+              email: newUserPayload.email,
+              hashedPassword: newUserPayload.password,
+              username: newUserPayload.username,
             }),
-          errorText: 'Failed to create a user with email: some-email',
+          errorText: `failed to create a user with email: ${newUserPayload.email}`,
           operation: repo.createUser.name,
         },
         {
@@ -86,13 +90,13 @@ const getRepoInterfaceTests = (repo: Repo) => {
           operation: repo.updateSessionIdleTimeout.name,
         },
         {
-          method: async () => repo.findUserByUsername(randomUsername),
-          errorText: `failed to find users by username: ${randomUsername}`,
+          method: async () => repo.findUserByUsername(newUserPayload.username),
+          errorText: `failed to find users by username: ${newUserPayload.username}`,
           operation: repo.findUserByUsername.name,
         },
         {
-          method: async () => repo.findUserByEmail(randomEmail),
-          errorText: `Failed to find a user with email ${randomEmail}`,
+          method: async () => repo.findUserByEmail(newUserPayload.email),
+          errorText: `failed to find a user by email ${newUserPayload.email}`,
           operation: repo.findUserByEmail.name,
         },
         {
@@ -108,14 +112,29 @@ const getRepoInterfaceTests = (repo: Repo) => {
       );
     },
     successTests: () => {
+      beforeEach(async () => {
+        const newUser = await repo.createUser({
+          email: userData.email,
+          hashedPassword: userData.password,
+          username: userData.username,
+        });
+        await repo.createSession({
+          ...sessionDataWithNoUser,
+          user: newUser,
+        });
+      });
+
       test.for([
         () => repo.findSessionByToken(randomTokenName),
         () => repo.findUserById(randomId),
-        () => repo.findUserByEmail(randomEmail),
-        () => repo.findUserByUsername(randomUsername),
-      ])('should return undefined when an entity is not found', (method) => {
-        expect(method()).toBeUndefined();
-      });
+        () => repo.findUserByEmail(newUserPayload.email),
+        () => repo.findUserByUsername(newUserPayload.username),
+      ])(
+        'should return undefined when an entity is not found',
+        async (method) => {
+          await expect(method()).resolves.toBeUndefined();
+        },
+      );
 
       it('should create a user', async () => {
         const userData = {
@@ -130,8 +149,8 @@ const getRepoInterfaceTests = (repo: Repo) => {
           password: userData.hashedPassword,
           email: userData.email,
           isEmailVerified: false,
+          role: null,
         });
-        expect(repo.findUserByEmail(newUser.email)).toEqual(newUser);
       });
 
       it('should create a new session', async () => {
@@ -142,7 +161,7 @@ const getRepoInterfaceTests = (repo: Repo) => {
           token: 'random-token',
           secret: 'random-secret',
         };
-        const founduser = repo.findUserById(userData.id)!;
+        const founduser = (await repo.findUserById(userData.id))!;
 
         const newSession = await repo.createSession({
           ...sessionData,
@@ -151,37 +170,56 @@ const getRepoInterfaceTests = (repo: Repo) => {
         expect(newSession).toEqual({
           id: expect.any(Number),
           ...sessionData,
-          user: founduser,
+          userId: founduser.id,
         });
-        expect(repo.findSessionByToken(newSession.token)).toEqual(newSession);
-      });
-
-      it('should find a session by token', async () => {
-        const session = repo.findSessionByToken(sessionDataWithNoUser.token);
-        expect(session).toEqual({
-          ...sessionDataWithNoUser,
+        await expect(
+          repo.findSessionByToken(newSession.token),
+        ).resolves.toEqual({
+          id: newSession.id,
+          secret: sessionData.secret,
+          token: sessionData.token,
+          createdAt: sessionData.createdAt,
+          updatedAt: sessionData.updatedAt,
+          expiresAt: sessionData.expiresAt,
           user: userData,
         });
       });
 
-      it('should find a user by id', () => {
-        const user = repo.findUserById(userData.id);
+      it('should find a session by token', async () => {
+        const session = await repo.findSessionByToken(
+          sessionDataWithNoUser.token,
+        );
+        expect(session).toEqual({
+          id: sessionDataWithNoUser.id,
+          createdAt: sessionDataWithNoUser.createdAt,
+          updatedAt: sessionDataWithNoUser.updatedAt,
+          expiresAt: sessionDataWithNoUser.expiresAt,
+          token: sessionDataWithNoUser.token,
+          secret: sessionDataWithNoUser.secret,
+          user: userData,
+        });
+      });
+
+      it('should find a user by id', async () => {
+        const user = await repo.findUserById(userData.id);
         expect(user).toEqual(userData);
       });
 
-      it('should find a user by email', () => {
-        const user = repo.findUserByEmail(userData.email);
+      it('should find a user by email', async () => {
+        const user = await repo.findUserByEmail(userData.email);
         expect(user).toEqual(userData);
       });
 
-      it('should find the first user with provided username', () => {
-        const user = repo.findUserByUsername(userData.username);
+      it('should find the first user with provided username', async () => {
+        const user = await repo.findUserByUsername(userData.username);
         expect(user).toEqual(userData);
       });
 
-      it('should delete a session by token', () => {
+      it('should delete a session by token', async () => {
         repo.deleteSessionByToken(sessionDataWithNoUser.token);
-        const session = repo.findSessionByToken(sessionDataWithNoUser.token);
+        const session = await repo.findSessionByToken(
+          sessionDataWithNoUser.token,
+        );
         expect(session).toBeUndefined();
       });
 
@@ -189,10 +227,10 @@ const getRepoInterfaceTests = (repo: Repo) => {
         vi.setSystemTime(timeNow + IDLE_TIMEOUT_MS);
 
         await repo.updateSessionIdleTimeout(sessionDataWithNoUser.id);
-
-        expect(
-          repo.findSessionByToken(sessionDataWithNoUser.token)?.updatedAt,
-        ).toBe(
+        const session = (await repo.findSessionByToken(
+          sessionDataWithNoUser.token,
+        ))!;
+        expect(session.updatedAt).toBe(
           new Date(
             Date.parse(sessionDataWithNoUser.updatedAt) + IDLE_TIMEOUT_MS,
           ).toISOString(),
@@ -208,11 +246,11 @@ const getRepoInterfaceTests = (repo: Repo) => {
         vi.setSystemTime(timeNowPlusIdleTimeout + 1);
 
         const newUser = await repo.createUser({
-          email: randomEmail,
-          hashedPassword: randomPassword,
-          username: userData.username,
+          email: newUserPayload.email,
+          hashedPassword: newUserPayload.password,
+          username: newUserPayload.username,
         });
-        const session = await repo.createSession({
+        const newSession = await repo.createSession({
           ...sessionDataWithNoUser,
           token: randomTokenName,
           createdAt,
@@ -220,12 +258,22 @@ const getRepoInterfaceTests = (repo: Repo) => {
           user: newUser,
         });
 
-        repo.deleteSessionsWithExpiredIdleTimeout();
+        await repo.deleteSessionsWithExpiredIdleTimeout();
 
-        expect(
+        await expect(
           repo.findSessionByToken(sessionDataWithNoUser.token),
-        ).toBeUndefined();
-        expect(repo.findSessionByToken(session.token)).toEqual(session);
+        ).resolves.toBeUndefined();
+        await expect(
+          repo.findSessionByToken(newSession.token),
+        ).resolves.toEqual({
+          id: newSession.id,
+          secret: newSession.secret,
+          token: newSession.token,
+          createdAt: newSession.createdAt,
+          updatedAt: newSession.updatedAt,
+          expiresAt: newSession.expiresAt,
+          user: newUser,
+        });
 
         vi.setSystemTime(timeNow);
       });
@@ -238,11 +286,11 @@ const getRepoInterfaceTests = (repo: Repo) => {
         vi.setSystemTime(timeNowPlusAbsoluteTimeout + 1);
 
         const newUser = await repo.createUser({
-          email: randomEmail,
-          hashedPassword: randomPassword,
-          username: userData.username,
+          email: newUserPayload.email,
+          hashedPassword: newUserPayload.password,
+          username: newUserPayload.username,
         });
-        const session = await repo.createSession({
+        const newSession = await repo.createSession({
           ...sessionDataWithNoUser,
           token: randomTokenName,
           createdAt,
@@ -253,12 +301,22 @@ const getRepoInterfaceTests = (repo: Repo) => {
           user: newUser,
         });
 
-        repo.deleteSessionsWithExpiredAbsoluteTimeout();
+        await repo.deleteSessionsWithExpiredAbsoluteTimeout();
 
-        expect(
+        await expect(
           repo.findSessionByToken(sessionDataWithNoUser.token),
-        ).toBeUndefined();
-        expect(repo.findSessionByToken(session.token)).toEqual(session);
+        ).resolves.toBeUndefined();
+        await expect(
+          repo.findSessionByToken(newSession.token),
+        ).resolves.toEqual({
+          id: newSession.id,
+          secret: newSession.secret,
+          token: newSession.token,
+          createdAt: newSession.createdAt,
+          updatedAt: newSession.updatedAt,
+          expiresAt: newSession.expiresAt,
+          user: newUser,
+        });
 
         vi.setSystemTime(timeNow);
       });

@@ -7,10 +7,10 @@ import {
   getRawSessionTokenAndSecret,
   hashSessionSecret,
 } from '../lib/session-utils';
-import type { Session } from '../repo/db';
-import { repo } from '../repo/repo';
+import type { SessionWithUser } from '../repo/types/entities';
+import { repo } from '../repo/msw/repo';
 
-vitest.mock('../repo/repo');
+vitest.mock('../repo/msw/repo');
 vitest.mock('pino-http');
 
 const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
@@ -27,13 +27,13 @@ const mockedSessionInstance = {
     email: 'my-email',
   },
   secret: hashSessionSecret(rawSessionSecret),
-} as Session;
+} as SessionWithUser;
 
 const mockedDelete = vitest.mocked(repo.deleteSessionByToken);
 const mockedFindSessionByToken = vitest.mocked(repo.findSessionByToken);
 
 test.beforeEach(() => {
-  mockedFindSessionByToken.mockReturnValueOnce(mockedSessionInstance);
+  mockedFindSessionByToken.mockResolvedValue(mockedSessionInstance);
 });
 
 test('successfull sign-out', async () => {
