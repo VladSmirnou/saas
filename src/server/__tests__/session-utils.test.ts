@@ -14,10 +14,10 @@ import {
   isSessionFresh,
   safeCompareSessionHashedSecrets,
 } from '../lib/session-utils';
-import { repo } from '../repo/msw/repo';
+import { repo } from '../repo/get-current-repo';
 import type { SessionWithUser, User } from '../repo/types/entities';
 
-vitest.mock('../repo/msw/repo');
+vitest.mock('../repo/get-current-repo.ts');
 
 const mockedFindSessionByToken = vitest.mocked(repo.findSessionByToken);
 const mockedDeleteSessionsWithExpiredIdleTimeout = vitest.mocked(

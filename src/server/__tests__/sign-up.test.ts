@@ -1,10 +1,10 @@
 import request from 'supertest';
 import { mockLogError } from '../../../__mocks__/pino-http';
 import { app } from '../app';
-import { repo } from '../repo/msw/repo';
+import { repo } from '../repo/get-current-repo';
 import type { User } from '../repo/types/entities';
 
-vitest.mock('../repo/msw/repo');
+vitest.mock('../repo/get-current-repo.ts');
 vitest.mock('pino-http');
 
 const mockedFindUserByUsername = vitest.mocked(repo.findUserByUsername);

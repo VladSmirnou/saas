@@ -137,17 +137,16 @@ const getRepoInterfaceTests = (repo: Repo) => {
       );
 
       it('should create a user', async () => {
-        const userData = {
-          email: 'new-email@gmail.com',
-          hashedPassword: 'my-password',
-          username: 'username',
-        };
-        const newUser = await repo.createUser(userData);
+        const newUser = await repo.createUser({
+          email: newUserPayload.email,
+          hashedPassword: newUserPayload.password,
+          username: newUserPayload.username,
+        });
         expect(newUser).toEqual({
           id: expect.any(Number),
-          username: userData.username,
-          password: userData.hashedPassword,
-          email: userData.email,
+          username: newUserPayload.username,
+          password: newUserPayload.password,
+          email: newUserPayload.email,
           isEmailVerified: false,
           role: null,
         });
@@ -161,16 +160,20 @@ const getRepoInterfaceTests = (repo: Repo) => {
           token: 'random-token',
           secret: 'random-secret',
         };
-        const founduser = (await repo.findUserById(userData.id))!;
+        const newUser = await repo.createUser({
+          email: newUserPayload.email,
+          hashedPassword: newUserPayload.password,
+          username: newUserPayload.username,
+        });
 
         const newSession = await repo.createSession({
           ...sessionData,
-          user: founduser,
+          user: newUser,
         });
         expect(newSession).toEqual({
           id: expect.any(Number),
           ...sessionData,
-          userId: founduser.id,
+          userId: newUser.id,
         });
         await expect(
           repo.findSessionByToken(newSession.token),
@@ -181,7 +184,7 @@ const getRepoInterfaceTests = (repo: Repo) => {
           createdAt: sessionData.createdAt,
           updatedAt: sessionData.updatedAt,
           expiresAt: sessionData.expiresAt,
-          user: userData,
+          user: newUser,
         });
       });
 
@@ -216,7 +219,7 @@ const getRepoInterfaceTests = (repo: Repo) => {
       });
 
       it('should delete a session by token', async () => {
-        repo.deleteSessionByToken(sessionDataWithNoUser.token);
+        await repo.deleteSessionByToken(sessionDataWithNoUser.token);
         const session = await repo.findSessionByToken(
           sessionDataWithNoUser.token,
         );
@@ -291,7 +294,7 @@ const getRepoInterfaceTests = (repo: Repo) => {
           username: newUserPayload.username,
         });
         const newSession = await repo.createSession({
-          ...sessionDataWithNoUser,
+          secret: sessionDataWithNoUser.secret,
           token: randomTokenName,
           createdAt,
           updatedAt: createdAt,

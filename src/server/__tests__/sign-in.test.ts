@@ -16,10 +16,10 @@ import {
   hashSessionSecret,
   isFakeUser,
 } from '../lib/session-utils';
-import { repo } from '../repo/msw/repo';
+import { repo } from '../repo/get-current-repo';
 import type { User } from '../repo/types/entities';
 
-vitest.mock('../repo/msw/repo');
+vitest.mock('../repo/get-current-repo.ts');
 vitest.mock('pino-http');
 vitest.mock(import('../lib/manage-password'), async (importOriginal) => {
   const mod = await importOriginal();

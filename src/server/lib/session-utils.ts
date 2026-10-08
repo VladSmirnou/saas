@@ -4,7 +4,7 @@ import {
   CLEAR_EXPIRED_IDLE_TIME_SESSIONS_INTERVAL,
   FAKE_USER,
 } from '../constants/session';
-import { repo } from '../repo/msw/repo';
+import { repo } from '../repo/get-current-repo';
 import { loggerInstance } from '../logger';
 import { getEncryptedString } from './get-encrypted-string';
 import type { User } from '../repo/types/entities';

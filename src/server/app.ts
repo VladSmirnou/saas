@@ -216,7 +216,7 @@ app.post(
 
 app.delete(
   '/sign-out',
-  withSession((req, res) => {
+  withSession(async (req, res) => {
     const session = req.session;
 
     res.clearCookie(SESSION_ID_NAME, {
@@ -225,7 +225,7 @@ app.delete(
     });
     res.set('clear-site-data', '"cache"');
     try {
-      repo.deleteSessionByToken(session.token);
+      await repo.deleteSessionByToken(session.token);
       req.log.info(
         `User: ${session.user.id} has logged out. Session: ${session.token} was successfully terminated.`,
       );

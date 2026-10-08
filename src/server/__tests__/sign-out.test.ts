@@ -8,9 +8,9 @@ import {
   hashSessionSecret,
 } from '../lib/session-utils';
 import type { SessionWithUser } from '../repo/types/entities';
-import { repo } from '../repo/msw/repo';
+import { repo } from '../repo/get-current-repo';
 
-vitest.mock('../repo/msw/repo');
+vitest.mock('../repo/get-current-repo.ts');
 vitest.mock('pino-http');
 
 const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();

@@ -3,16 +3,19 @@ import { errorMessages } from '../constants/error-messages';
 import type { Repo, Session, User } from '../types/repo';
 import { sql } from './connection';
 
+type QuerySession = Omit<Session, 'id'> & { sessionId: number };
+type QueryUser = Omit<User, 'id'> & { userId: number };
+
 export const repo: Repo = {
   async findSessionByToken(token) {
     try {
-      const sessions = await sql<[(User & Session)?]>`
+      const sessions = await sql<[(QueryUser & QuerySession)?]>`
       select
         sessions.id as session_id,
         users.id as user_id,
-        expiresAt,
-        createdAt,
-        updatedAt,
+        expires_at,
+        created_at,
+        updated_at,
         token,
         secret,
         username,
@@ -26,7 +29,7 @@ export const repo: Repo = {
       if (!session) return undefined;
 
       return {
-        id: session.id,
+        id: session.sessionId,
         token: session.token,
         secret: session.secret,
         expiresAt: session.expiresAt,
@@ -49,7 +52,7 @@ export const repo: Repo = {
   async findUserById(id) {
     try {
       const users = await sql<[User?]>`
-        select id, username, email, is_email_verified, role from users where id = ${id};
+        select id, username, email, is_email_verified, password, role from users where id = ${id};
       `;
       const user = users.at(0);
       if (!user) return undefined;
@@ -62,7 +65,7 @@ export const repo: Repo = {
   async findUserByEmail(email) {
     try {
       const users = await sql<[User?]>`
-        select id, username, email, is_email_verified, role from users where email = ${email};
+        select id, username, email, is_email_verified, password, role from users where email = ${email};
       `;
       const user = users.at(0);
       if (!user) return undefined;
@@ -82,7 +85,7 @@ export const repo: Repo = {
 
   async deleteSessionsWithExpiredAbsoluteTimeout() {
     try {
-      await sql`delete from sessions where expires_at < ${Date.now()}`;
+      await sql`delete from sessions where expires_at < ${new Date(Date.now()).toISOString()}`;
     } catch {
       throw new Error(errorMessages.failedToDeleteSessionsWithAbsoluteTimeout);
     }
@@ -90,7 +93,7 @@ export const repo: Repo = {
 
   async deleteSessionByToken(token) {
     try {
-      await sql`delete from session where token = ${token}`;
+      await sql`delete from sessions where token = ${token}`;
     } catch {
       throw new Error(errorMessages.failedToDeleteSessionByToken(token));
     }
@@ -120,7 +123,7 @@ export const repo: Repo = {
           ${token},
           ${secret},
           ${user.id}
-        ) returning created_at, expires_at, updated_at, token, secret, user_id
+        ) returning id, created_at, expires_at, updated_at, token, secret, user_id
       `;
       return sessions[0];
     } catch {
@@ -132,7 +135,7 @@ export const repo: Repo = {
     try {
       const users = await sql<
         [User?]
-      >`select from users where username = ${username}`;
+      >`select id, username, email, is_email_verified, password, role from users where username = ${username}`;
 
       const user = users.at(0);
       if (!user) return undefined;
@@ -163,7 +166,7 @@ export const repo: Repo = {
 
   async updateSessionIdleTimeout(sessionId) {
     try {
-      await sql`update sessions set updated_at = ${new Date(Date.now()).toISOString()} where session_id = ${sessionId}`;
+      await sql`update sessions set updated_at = ${new Date(Date.now()).toISOString()} where id = ${sessionId}`;
     } catch {
       throw new Error(
         errorMessages.failedToUpdateSessionIdleTimeout(sessionId),
