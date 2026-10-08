@@ -15,6 +15,9 @@ export default defineConfig((configEnv) => {
         mockReset: true,
         restoreMocks: true,
         include: ['src/__tests__/*.test.{ts,tsx}'],
+        coverage: {
+          provider: 'v8',
+        },
       },
     }),
   );

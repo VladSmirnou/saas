@@ -1,0 +1,8 @@
+{
+  "postgres": {
+    "setupFilePath": "src/server/test-utils/postgres-setup.ts"
+  },
+  "msw": {
+    "setupFilePath": null
+  }
+}

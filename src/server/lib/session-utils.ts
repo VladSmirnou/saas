@@ -1,16 +1,17 @@
 import crypto from 'crypto';
 import {
+  CLEAR_EXPIRED_ABSOLUTE_TIME_SESSIONS_INTERVAL,
   CLEAR_EXPIRED_IDLE_TIME_SESSIONS_INTERVAL,
   FAKE_USER,
 } from '../constants/session';
-import { type Session, type User } from '../repo/db';
-import { repo } from '../repo/repo';
+import { repo } from '../repo/get-current-repo';
 import { loggerInstance } from '../logger';
 import { getEncryptedString } from './get-encrypted-string';
+import type { User } from '../repo/types/entities';
 
 type FakeUser = typeof FAKE_USER;
 
-const getSessionInstanceBySessionValue = (sessionValue: string | undefined) => {
+const getSessionInstanceBySessionValue = async (sessionValue?: string) => {
   if (!sessionValue) {
     throw new Error('session value is either undefined or an empty string');
   }
@@ -22,24 +23,24 @@ const getSessionInstanceBySessionValue = (sessionValue: string | undefined) => {
 
   const [rawToken, rawSecret] = splitSessionIdValue;
 
-  const session = repo.findSessionByToken(rawToken);
+  const session = await repo.findSessionByToken(rawToken);
   if (!session) {
     throw new Error("session doesn't exist");
   }
 
   const hashedIncommingSecret = hashSessionSecret(rawSecret);
 
-  if (!safeCompareSessionSignatures(session.secret, hashedIncommingSecret)) {
+  if (!safeCompareSessionHashedSecrets(session.secret, hashedIncommingSecret)) {
     throw new Error("session secrets don't match");
   }
 
   return session;
 };
 
-const isSessionFresh = (session: Session) =>
-  new Date(session.expiresAt).getTime() > new Date().getTime();
+const isSessionFresh = (expiresAt: string) =>
+  new Date(expiresAt).getTime() > new Date().getTime();
 
-const safeCompareSessionSignatures = (a: string, b: string) => {
+const safeCompareSessionHashedSecrets = (a: string, b: string) => {
   if (a.length !== b.length) {
     return false;
   }
@@ -53,9 +54,9 @@ const safeCompareSessionSignatures = (a: string, b: string) => {
 const isFakeUser = (user: User | FakeUser): user is FakeUser => 'fake' in user;
 
 const clearExpiredIdleTimeSessions = () => {
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
-      repo.deleteSessionsWithExpiredIdleTimeout();
+      await repo.deleteSessionsWithExpiredIdleTimeout();
     } catch (error) {
       loggerInstance.logger.error(
         {
@@ -66,6 +67,22 @@ const clearExpiredIdleTimeSessions = () => {
     }
     clearExpiredIdleTimeSessions();
   }, CLEAR_EXPIRED_IDLE_TIME_SESSIONS_INTERVAL);
+};
+
+const clearExpiredAbsoluteTimeSessions = () => {
+  setTimeout(async () => {
+    try {
+      await repo.deleteSessionsWithExpiredAbsoluteTimeout();
+    } catch (error) {
+      loggerInstance.logger.error(
+        {
+          err: error,
+        },
+        'Failed to clear expired absolute time sessions',
+      );
+    }
+    clearExpiredAbsoluteTimeSessions();
+  }, CLEAR_EXPIRED_ABSOLUTE_TIME_SESSIONS_INTERVAL);
 };
 
 const hashSessionSecret = (sessionSecret: string) =>
@@ -93,8 +110,9 @@ export {
   getSessionInstanceBySessionValue,
   isFakeUser,
   isSessionFresh,
-  safeCompareSessionSignatures,
+  safeCompareSessionHashedSecrets,
   hashSessionSecret,
   createSessionIdValue,
   getRawSessionTokenAndSecret,
+  clearExpiredAbsoluteTimeSessions,
 };

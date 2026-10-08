@@ -1,9 +1,11 @@
 import request from 'supertest';
+import { mockLogError } from '../../../__mocks__/pino-http';
 import { app } from '../app';
-import { repo } from '../repo/repo';
-import type { User } from '../repo/db';
+import { repo } from '../repo/get-current-repo';
+import type { User } from '../repo/types/entities';
 
-vitest.mock('../repo/repo');
+vitest.mock('../repo/get-current-repo.ts');
+vitest.mock('pino-http');
 
 const mockedFindUserByUsername = vitest.mocked(repo.findUserByUsername);
 
@@ -17,8 +19,8 @@ const mockedSubmittedData = {
 };
 
 test('should sign-up successfully', async () => {
-  mockedFindUserByUsername.mockReturnValueOnce(undefined);
-  mockedFindUserbyEmail.mockReturnValueOnce(undefined);
+  mockedFindUserByUsername.mockResolvedValueOnce(undefined);
+  mockedFindUserbyEmail.mockResolvedValueOnce(undefined);
 
   const response = await request(app)
     .post('/sign-up')
@@ -44,6 +46,17 @@ test('should return an error if failed to create a user', async () => {
   expect(response.body).toEqual({ server: 'Failed to create user' });
 });
 
+test('should return an opaque success on existing user found by email', async () => {
+  mockedFindUserbyEmail.mockResolvedValueOnce({} as User);
+
+  const response = await request(app)
+    .post('/sign-up')
+    .send(mockedSubmittedData);
+
+  expect(response.status).toBe(201);
+  expect(mockedCreateUser).not.toHaveBeenCalled();
+});
+
 test('should return validation error on invalid submitted data', async () => {
   const response = await request(app)
     .post('/sign-up')
@@ -58,7 +71,7 @@ test('should return validation error on invalid submitted data', async () => {
 });
 
 test('should return an error if user with provided username already exists', async () => {
-  mockedFindUserByUsername.mockReturnValueOnce({} as User);
+  mockedFindUserByUsername.mockResolvedValueOnce({} as User);
   const response = await request(app)
     .post('/sign-up')
     .send(mockedSubmittedData);
@@ -70,26 +83,23 @@ test('should return an error if user with provided username already exists', asy
 });
 
 test('should return an error if find by username query fails', async () => {
-  mockedFindUserbyEmail.mockImplementationOnce(() => {
-    throw new Error('db connection failure');
+  const error = new Error('db connection failure');
+
+  mockedFindUserByUsername.mockImplementationOnce(() => {
+    throw error;
   });
   const response = await request(app)
     .post('/sign-up')
     .send(mockedSubmittedData);
 
+  expect(mockLogError).toHaveBeenCalledWith(
+    {
+      err: error,
+    },
+    `Failed to find a used by username: ${mockedSubmittedData.username}`,
+  );
   expect(response.status).toBe(400);
   expect(response.body).toEqual({
-    server: 'Failed to sign-up',
+    server: 'Failed to sign-up. Try again',
   });
-});
-
-test('should return an opaque success on existing user found by email', async () => {
-  mockedFindUserbyEmail.mockReturnValueOnce({} as User);
-
-  const response = await request(app)
-    .post('/sign-up')
-    .send(mockedSubmittedData);
-
-  expect(response.status).toBe(201);
-  expect(mockedCreateUser).not.toHaveBeenCalled();
 });

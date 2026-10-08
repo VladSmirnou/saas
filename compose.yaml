@@ -1,0 +1,19 @@
+services:
+  postgres-db:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: saas
+    container_name: postgres-db-container
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres-volume:/var/lib/postgresql
+  adminer:
+    image: adminer
+    container_name: pg-adminer
+    ports:
+      - 8080:8080
+
+volumes:
+  postgres-volume:

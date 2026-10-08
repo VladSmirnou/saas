@@ -1,6 +1,5 @@
-import type { NextFunction, Request, Response } from 'express';
-import type { Options } from 'pino-http';
 import request from 'supertest';
+import { mockLogError, mockLogInfo } from '../../../__mocks__/pino-http';
 import { app } from '../app';
 import { SESSION_ID_NAME } from '../constants/session';
 import {
@@ -8,35 +7,11 @@ import {
   getRawSessionTokenAndSecret,
   hashSessionSecret,
 } from '../lib/session-utils';
-import type { Session } from '../repo/db';
-import { repo } from '../repo/repo';
+import type { SessionWithUser } from '../repo/types/entities';
+import { repo } from '../repo/get-current-repo';
 
-vitest.mock('../repo/repo');
-
-const { mockLogError, mockLogInfo } = vi.hoisted(() => {
-  return {
-    mockLogError: vi.fn(),
-    mockLogInfo: vi.fn(),
-  };
-});
-vi.mock('pino-http', async (loadOriginal) => {
-  const original = await loadOriginal<typeof import('pino-http')>();
-
-  return {
-    ...original,
-    default: (opts: Options) => {
-      const middleware = original.default(opts);
-
-      return (req: Request, res: Response, next: NextFunction) => {
-        middleware(req, res, () => {
-          req.log.error = mockLogError;
-          req.log.info = mockLogInfo;
-          next();
-        });
-      };
-    },
-  };
-});
+vitest.mock('../repo/get-current-repo.ts');
+vitest.mock('pino-http');
 
 const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
 
@@ -52,13 +27,13 @@ const mockedSessionInstance = {
     email: 'my-email',
   },
   secret: hashSessionSecret(rawSessionSecret),
-} as Session;
+} as SessionWithUser;
 
 const mockedDelete = vitest.mocked(repo.deleteSessionByToken);
 const mockedFindSessionByToken = vitest.mocked(repo.findSessionByToken);
 
 test.beforeEach(() => {
-  mockedFindSessionByToken.mockReturnValueOnce(mockedSessionInstance);
+  mockedFindSessionByToken.mockResolvedValue(mockedSessionInstance);
 });
 
 test('successfull sign-out', async () => {
@@ -70,7 +45,7 @@ test('successfull sign-out', async () => {
   expect(mockLogInfo.mock.calls).toEqual(
     expect.arrayContaining([
       expect.arrayContaining([
-        expect.stringContaining(mockedSessionInstance.user.email),
+        expect.stringContaining(String(mockedSessionInstance.user.id)),
         expect.stringContaining(mockedSessionInstance.token),
       ]),
     ]),

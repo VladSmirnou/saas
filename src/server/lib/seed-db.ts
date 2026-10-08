@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import { users, todolists } from '../repo/db';
+import { users, todolists } from '../repo/msw/models';
 import { hashPassword } from './manage-password';
 
 const passwords: string[] = await Promise.all(

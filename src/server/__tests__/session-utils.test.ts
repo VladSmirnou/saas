@@ -1,6 +1,10 @@
 import { describe, expect, test, vi, vitest } from 'vitest';
-import { IDLE_TIMEOUT } from '../constants/session';
 import {
+  CLEAR_EXPIRED_ABSOLUTE_TIME_SESSIONS_INTERVAL,
+  IDLE_TIMEOUT_MS,
+} from '../constants/session';
+import {
+  clearExpiredAbsoluteTimeSessions,
   clearExpiredIdleTimeSessions,
   createSessionIdValue,
   getRawSessionTokenAndSecret,
@@ -8,112 +12,125 @@ import {
   hashSessionSecret,
   isFakeUser,
   isSessionFresh,
-  safeCompareSessionSignatures,
+  safeCompareSessionHashedSecrets,
 } from '../lib/session-utils';
-import type { Session, User } from '../repo/db';
-import { repo } from '../repo/repo';
+import { repo } from '../repo/get-current-repo';
+import type { SessionWithUser, User } from '../repo/types/entities';
 
-vitest.mock('../repo/repo');
+vitest.mock('../repo/get-current-repo.ts');
 
 const mockedFindSessionByToken = vitest.mocked(repo.findSessionByToken);
 const mockedDeleteSessionsWithExpiredIdleTimeout = vitest.mocked(
   repo.deleteSessionsWithExpiredIdleTimeout,
 );
+const mockedDeleteSessionsWithExpiredAbsoluteTimeout = vitest.mocked(
+  repo.deleteSessionsWithExpiredAbsoluteTimeout,
+);
+
+const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
+
+const sessionValue = createSessionIdValue({
+  rawSessionToken,
+  rawSessionSecret,
+});
 
 describe('safeCompareSessionSignatures', () => {
   test('should return false if strings have different length', () => {
     const a = 'abcd';
     const b = 'abcde';
 
-    expect(safeCompareSessionSignatures(a, b)).toBeFalsy();
+    expect(safeCompareSessionHashedSecrets(a, b)).toBeFalsy();
   });
 
   test('should return false if strings are different', () => {
     const a = 'abcd';
     const b = 'abce';
 
-    expect(safeCompareSessionSignatures(a, b)).toBeFalsy();
+    expect(safeCompareSessionHashedSecrets(a, b)).toBeFalsy();
   });
 
   test('should return true if strings are the same', () => {
     const a = 'abcd';
     const b = 'abcd';
 
-    expect(safeCompareSessionSignatures(a, b)).toBeTruthy();
+    expect(safeCompareSessionHashedSecrets(a, b)).toBeTruthy();
   });
 });
 
 describe('isSessionFresh', () => {
   test('should return false if session is expired', () => {
     const timeNow = Date.now();
-    expect(
-      isSessionFresh({
-        expiresAt: new Date(timeNow - 1000).toISOString(),
-      } as Session),
-    ).toBeFalsy();
+    expect(isSessionFresh(new Date(timeNow - 1000).toISOString())).toBeFalsy();
   });
 
   test('should return true if session is stil valid', () => {
     const timeNow = Date.now();
-    expect(
-      isSessionFresh({
-        expiresAt: new Date(timeNow + 1000).toISOString(),
-      } as Session),
-    ).toBeTruthy();
+    expect(isSessionFresh(new Date(timeNow + 1000).toISOString())).toBeTruthy();
   });
 });
 
 describe('getSessionInstanceBySessionValue', () => {
-  test('should return session if session value is correct', () => {
-    const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
-
-    const sessionValue = createSessionIdValue({
-      rawSessionToken,
-      rawSessionSecret,
-    });
-
+  test('should return session if session value is correct', async () => {
     const mockedSession = {
       secret: hashSessionSecret(rawSessionSecret),
-    } as Session;
+    } as SessionWithUser;
 
-    mockedFindSessionByToken.mockReturnValue(mockedSession);
+    mockedFindSessionByToken.mockResolvedValue(mockedSession);
 
-    expect(getSessionInstanceBySessionValue(sessionValue)).toBe(mockedSession);
-  });
-
-  test('should throw an error when session value is an empty string or undefined', () => {
-    const errorMessage = 'session value is either undefined or an empty string';
-    expect(() => getSessionInstanceBySessionValue('')).toThrow(errorMessage);
-    expect(() => getSessionInstanceBySessionValue(undefined)).toThrow(
-      errorMessage,
+    await expect(getSessionInstanceBySessionValue(sessionValue)).resolves.toBe(
+      mockedSession,
     );
   });
 
-  test("should throw if session id value doesn't split into token and signature correctly", () => {
+  test('should throw an error when session value is an empty string or undefined', async () => {
+    const errorMessage = 'session value is either undefined or an empty string';
+    await expect(() => getSessionInstanceBySessionValue('')).rejects.toThrow(
+      errorMessage,
+    );
+    await expect(() =>
+      getSessionInstanceBySessionValue(undefined),
+    ).rejects.toThrow(errorMessage);
+  });
+
+  test('should throw an error when cannot find session by token', async () => {
+    const errorMessage = "session doesn't exist";
+    await expect(() =>
+      getSessionInstanceBySessionValue(sessionValue),
+    ).rejects.toThrow(errorMessage);
+  });
+
+  test("should throw an error if hashed secrets don't match", async () => {
+    const errorMessage = "session secrets don't match";
+    const mockedSession = {
+      secret: '123',
+    } as SessionWithUser;
+
+    mockedFindSessionByToken.mockResolvedValue(mockedSession);
+
+    await expect(() =>
+      getSessionInstanceBySessionValue(sessionValue),
+    ).rejects.toThrow(errorMessage);
+  });
+
+  test("should throw if session id value doesn't split into token and signature correctly", async () => {
     const sessionValue = '123';
     const errorMessage = 'invalid session id value';
 
-    expect(() => getSessionInstanceBySessionValue(sessionValue)).toThrow(
-      errorMessage,
-    );
+    await expect(() =>
+      getSessionInstanceBySessionValue(sessionValue),
+    ).rejects.toThrow(errorMessage);
   });
 
-  test("should throw if a session doesn't exist", () => {
+  test("should throw if a session doesn't exist", async () => {
     const errorMessage = "session doesn't exist";
-    const { rawSessionToken, rawSessionSecret } = getRawSessionTokenAndSecret();
-
-    const sessionValue = createSessionIdValue({
-      rawSessionToken,
-      rawSessionSecret,
-    });
 
     mockedFindSessionByToken.mockImplementationOnce(() => {
       throw new Error(errorMessage);
     });
 
-    expect(() => getSessionInstanceBySessionValue(sessionValue)).toThrow(
-      errorMessage,
-    );
+    await expect(() =>
+      getSessionInstanceBySessionValue(sessionValue),
+    ).rejects.toThrow(errorMessage);
   });
 });
 
@@ -124,7 +141,7 @@ describe('isFakeUser', () => {
   });
 });
 
-describe('clearExpiredIdleTimeSessions', () => {
+describe('timers', () => {
   test.beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -132,14 +149,48 @@ describe('clearExpiredIdleTimeSessions', () => {
     vi.useRealTimers();
   });
 
-  test('should be called a proper amount of times in a given time interval', () => {
-    const callTimes = 5;
-    clearExpiredIdleTimeSessions();
+  const callTimes = 5;
+  describe('clearExpiredIdleTimeSessions', () => {
+    test('should be called a proper amount of times in a given time interval', async () => {
+      clearExpiredIdleTimeSessions();
 
-    vi.advanceTimersByTime(IDLE_TIMEOUT * callTimes);
-    expect(mockedDeleteSessionsWithExpiredIdleTimeout).toHaveBeenCalledTimes(
-      callTimes,
-    );
+      await vi.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS * callTimes);
+      expect(mockedDeleteSessionsWithExpiredIdleTimeout).toHaveBeenCalledTimes(
+        callTimes,
+      );
+    });
+  });
+
+  describe('clearExpiredAbsoluteTimeSessions', () => {
+    test('should be called a proper amount of times in a given time interval', async () => {
+      clearExpiredAbsoluteTimeSessions();
+
+      await vi.advanceTimersByTimeAsync(
+        CLEAR_EXPIRED_ABSOLUTE_TIME_SESSIONS_INTERVAL * callTimes,
+      );
+
+      expect(
+        mockedDeleteSessionsWithExpiredAbsoluteTimeout,
+      ).toHaveBeenCalledTimes(callTimes);
+    });
+
+    // test('should log an error if failed to delete sessions', () => {
+    //   const error = new Error('');
+
+    //   mockedDeleteSessionsWithExpiredAbsoluteTimeout.mockImplementationOnce(
+    //     () => {
+    //       throw error;
+    //     },
+    //   );
+    //   clearExpiredAbsoluteTimeSessions();
+
+    //   vi.runOnlyPendingTimers();
+
+    //   expect(mockLogError).toHaveBeenCalledWith(
+    //     { err: error },
+    //     'Failed to clear expired absolute time sessions',
+    //   );
+    // });
   });
 });
 
@@ -155,5 +206,18 @@ describe('createSessionIdValue', () => {
     expect(sessionValue).toMatch(
       `${sessionIdRawValues.rawSessionToken}.${sessionIdRawValues.rawSessionSecret}`,
     );
+  });
+});
+
+describe('getRawSessionTokenAndSecret', () => {
+  test('should create a random session token and session secret of required length', () => {
+    const { rawSessionSecret, rawSessionToken } = getRawSessionTokenAndSecret();
+
+    expect(rawSessionSecret).toEqual(expect.any(String));
+    expect(rawSessionToken).toEqual(expect.any(String));
+    expect(rawSessionSecret).not.toBe(rawSessionToken);
+
+    expect(rawSessionToken).toHaveLength(32);
+    expect(rawSessionSecret).toHaveLength(64);
   });
 });

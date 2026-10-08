@@ -22,7 +22,7 @@ import {
   isFakeUser,
 } from './lib/session-utils';
 import { loggerInstance } from './logger';
-import { repo } from './repo/repo';
+import { repo } from './repo/get-current-repo';
 import { signInSchema, signupSchema } from './validators';
 
 const port = Number(process.env.PORT!);
@@ -64,7 +64,7 @@ app.post(
 
     let user;
     try {
-      user = repo.findUserByEmail(email);
+      user = await repo.findUserByEmail(email);
       if (!user) {
         throw new Error("user doesn't exist");
       }
@@ -89,7 +89,7 @@ app.post(
     } catch (error) {
       if (error instanceof FakeUserError) {
         const nestedError = error.error;
-        req.log.error({ err: nestedError }, nestedError.message);
+        req.log.error({ err: nestedError });
       } else {
         req.log.error(
           { err: error },
@@ -119,7 +119,7 @@ app.post(
     } catch (error) {
       req.log.error(
         { err: error },
-        `Failed to create a session for a user: ${user.email}`,
+        `Failed to create a session for a user: ${user.id}`,
       );
       return res.status(401).json({
         server: 'invalid credentials',
@@ -137,7 +137,7 @@ app.post(
       },
     );
     res.set('cache-control', 'no-store');
-    req.log.info(`User ${user.email} has logged in successfully.`);
+    req.log.info(`User ${user.id} has logged in successfully.`);
     return res.sendStatus(200);
   }),
 );
@@ -159,7 +159,20 @@ app.post(
 
     const { email, password, username } = data;
 
-    const user = repo.findUserByUsername(username);
+    let user;
+    try {
+      user = await repo.findUserByUsername(username);
+    } catch (error) {
+      req.log.error(
+        {
+          err: error,
+        },
+        `Failed to find a used by username: ${username}`,
+      );
+      return res.status(400).json({
+        server: 'Failed to sign-up. Try again',
+      });
+    }
 
     if (user) {
       return res
@@ -171,19 +184,14 @@ app.post(
 
     let userByEmail;
     try {
-      userByEmail = repo.findUserByEmail(email);
+      userByEmail = await repo.findUserByEmail(email);
     } catch (error) {
-      req.log.error(
-        { err: error },
-        `Failed to find a user by email ${userByEmail}`,
-      );
+      req.log.error({ err: error }, `Failed to find a user by email: ${email}`);
       return res.status(400).json({ server: 'Failed to sign-up' });
     }
 
     if (userByEmail) {
-      req.log.warn(
-        `An attemp to sign-up with an existing email: ${userByEmail}`,
-      );
+      req.log.warn(`An attemp to sign-up as a user: ${userByEmail.id}`);
       return res.sendStatus(201);
     }
 
@@ -208,7 +216,7 @@ app.post(
 
 app.delete(
   '/sign-out',
-  withSession((req, res) => {
+  withSession(async (req, res) => {
     const session = req.session;
 
     res.clearCookie(SESSION_ID_NAME, {
@@ -217,9 +225,9 @@ app.delete(
     });
     res.set('clear-site-data', '"cache"');
     try {
-      repo.deleteSessionByToken(session.token);
+      await repo.deleteSessionByToken(session.token);
       req.log.info(
-        `User with email: ${session.user.email} has logged out. Session: ${session.token} was successfully terminated.`,
+        `User: ${session.user.id} has logged out. Session: ${session.token} was successfully terminated.`,
       );
       res.sendStatus(200);
     } catch (error) {
@@ -234,15 +242,11 @@ app.delete(
   }),
 );
 
-app.listen(port, host, () => {
-  import('./lib/seed-db')
-    .then(() => {
-      loggerInstance.logger.info('successfully seeded the DB');
-    })
-    .then(() => {
-      import('./lib/start-jobs').then(() => {
-        loggerInstance.logger.info('all jobs started successfully');
-        loggerInstance.logger.info(`server is listening on port:, ${port}`);
-      });
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(port, host, () => {
+    import('./lib/start-jobs').then(() => {
+      loggerInstance.logger.info('all jobs started successfully');
+      loggerInstance.logger.info(`server is listening on port: ${port}`);
     });
-});
+  });
+}
