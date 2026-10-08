@@ -34,8 +34,16 @@ const sessionSchema = z.object({
   },
 });
 
+let userAccountId = 1;
+const userAccountSchema = z.object({
+  id: z.number().default(() => userAccountId++),
+  createdAt: z.string(),
+  password: z.string(),
+});
+
 const users = new Collection({ schema: usersSchema });
 const sessions = new Collection({ schema: sessionSchema });
+const accounts = new Collection({ schema: userAccountSchema });
 
 sessions.defineRelations(({ one }) => ({
   user: one(users),
@@ -44,6 +52,7 @@ sessions.defineRelations(({ one }) => ({
 const resetAutoincrementIds = () => {
   nextUserId = 1;
   nextSessionId = 1;
+  userAccountId = 1;
 };
 
-export { sessions, todolists, users, resetAutoincrementIds };
+export { sessions, todolists, users, accounts, resetAutoincrementIds };

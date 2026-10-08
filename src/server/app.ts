@@ -246,17 +246,7 @@ if (process.env.NODE_ENV !== 'test') {
   app.listen(port, host, () => {
     import('./lib/start-jobs').then(() => {
       loggerInstance.logger.info('all jobs started successfully');
-      loggerInstance.logger.info(`server is listening on port:, ${port}`);
+      loggerInstance.logger.info(`server is listening on port: ${port}`);
     });
   });
 }
-
-// Let's run tests for a repo that is currently in use
-
-// I need test configurations per repo
-// repoType -> configFile
-
-// configFile -> {
-//  a setup code path,
-//  tests to include path
-// }
